@@ -1371,6 +1371,7 @@ export default function App() {
       ];
 
       let text = "";
+      let sourceFileName = "";
       let success = false;
       let authError = false;
 
@@ -1385,6 +1386,14 @@ export default function App() {
               continue;
             }
             text = resText;
+            const disposition = res.headers.get("Content-Disposition") || "";
+            const plainName = disposition.match(/filename\s*=\s*"([^"]+)"/i)
+              || disposition.match(/filename\s*=\s*([^;\s]+)/i);
+            const encodedName = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+            sourceFileName = plainName?.[1] || "";
+            if (!sourceFileName && encodedName) {
+              try { sourceFileName = decodeURIComponent(encodedName[1]); } catch { /* Use source label if unavailable. */ }
+            }
             success = true;
             break;
           }
@@ -1401,11 +1410,11 @@ export default function App() {
         }
       }
 
-      setFileName(`${SHEET_SOURCES.find(source => source.url === url)?.name || "Google Sheet"} · ดึงข้อมูลอัปเดตล่าสุดสำเร็จ`);
       const parseSuccess = processCSVData(text, true);
       if (!parseSuccess) {
         throw new Error("คอลัมน์ไม่ตรงกับระบบ กรุณาตรวจสอบหัวตาราง (Headers) ในไฟล์ของคุณ");
       }
+      setFileName((sourceFileName || SHEET_SOURCES.find(source => source.url === url)?.name || "Google Sheet").replace(/\.csv$/i, ""));
     } catch (error: any) {
       console.error("Fetch Error:", error);
       setLoadError(`${error.message}`);
@@ -2502,8 +2511,9 @@ export default function App() {
               <div className="mt-2">{renderSourceSelector()}</div>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`text-xs px-3 py-1 rounded-lg flex items-center gap-1.5 font-bold ${fileName.includes('ตัวอย่าง') ? 'bg-amber-500/20 text-amber-300' : 'bg-indigo-800/60 dark:bg-indigo-900/80 text-indigo-100'}`}>
-                  <CheckCircle className={`w-4 h-4 flex-shrink-0 ${fileName.includes('ตัวอย่าง') ? 'text-amber-400' : 'text-emerald-400'}`} />
-                  {fileName}
+                  <FileSpreadsheet className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                  <span>ไฟล์ข้อมูล: {fileName}</span>
+                  <CheckCircle className="w-4 h-4 flex-shrink-0 text-emerald-400" />
                 </span>
               </div>
             </div>
