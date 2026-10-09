@@ -1692,11 +1692,6 @@ export default function App() {
     // เปลี่ยนจาก for loop เป็น forEach
     rawData.forEach((r: any) => {
       if (r.month === latestMonth && r.rawCreateDate) {
-        const parts = r.rawCreateDate.split(" ")[0].split("/");
-        if (parts.length >= 2) {
-          const day = parseInt(parts[1], 10);
-          if (!isNaN(day) && day > maxDay) maxDay = day;
-        }
         // CSV uses day/month/year, e.g. 8/10/2026 21:12.
         const dateText = String(r.rawCreateDate).trim();
         const localDate = dateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
