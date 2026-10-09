@@ -1697,6 +1697,18 @@ export default function App() {
           const day = parseInt(parts[1], 10);
           if (!isNaN(day) && day > maxDay) maxDay = day;
         }
+        // CSV uses day/month/year, e.g. 8/10/2026 21:12.
+        const dateText = String(r.rawCreateDate).trim();
+        const localDate = dateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
+        const isoDate = dateText.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s|$)/);
+        if (localDate || isoDate) {
+          const day = Number(localDate ? localDate[1] : isoDate![3]);
+          const month = Number(localDate ? localDate[2] : isoDate![2]);
+          let year = Number(localDate ? localDate[3] : isoDate![1]);
+          if (year > 2400) year -= 543;
+          const date = new Date(year, month - 1, day);
+          if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && day > maxDay) maxDay = day;
+        }
       }
     });
     return maxDay;
@@ -2108,7 +2120,7 @@ export default function App() {
                     {getTrendHeader()}
                   </th>
                   <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
-                    <div className="text-[13px]">ประมาณการ</div>
+                    <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
                       {dynamicLists.months.length > 0
                         ? `(หาร ${latestMonthMaxDay} วัน * 30)`
@@ -2116,7 +2128,7 @@ export default function App() {
                     </div>
                   </th>
                   <th className="px-4 py-4 border-l border-slate-200 dark:border-slate-700 min-w-[150px] text-center">
-                    กราฟประมาณการ
+                    กราฟประมาณการเดือนล่าสุด
                   </th>
                 </tr>
               </thead>
