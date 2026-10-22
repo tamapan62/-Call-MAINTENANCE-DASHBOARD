@@ -1684,9 +1684,16 @@ export default function App() {
     [dashboardFilteredRecords]
   );
 
+  // Keep the complete month list in the filter; use selected months throughout charts and tables.
+  const visibleMonths = useMemo(() => {
+    if (filterMonth.length === 0) return dynamicLists.months;
+    const selected = new Set(filterMonth);
+    return dynamicLists.months.filter((month: string) => selected.has(month));
+  }, [dynamicLists.months, filterMonth]);
+
   const latestMonthMaxDay = useMemo(() => {
-    if (!isDataLoaded || dynamicLists.months.length === 0) return 1;
-    const latestMonth = dynamicLists.months[dynamicLists.months.length - 1];
+    if (!isDataLoaded || visibleMonths.length === 0) return 1;
+    const latestMonth = visibleMonths[visibleMonths.length - 1];
     let maxDay = 1;
     
     // เปลี่ยนจาก for loop เป็น forEach
@@ -1707,11 +1714,11 @@ export default function App() {
       }
     });
     return maxDay;
-  }, [rawData, dynamicLists.months, isDataLoaded]);
+  }, [rawData, visibleMonths, isDataLoaded]);
 
   const aggregatedStats = useMemo(() => {
     if (!isDataLoaded) return {};
-    const months = dynamicLists.months;
+    const months = visibleMonths;
     const numMonths = months.length;
     const monthToIndex: any = {};
     
@@ -1784,18 +1791,18 @@ export default function App() {
       }
     });
     return structures;
-  }, [globalFilteredRecords, crossFilters, dynamicLists.months, isDataLoaded]);
+  }, [globalFilteredRecords, crossFilters, visibleMonths, isDataLoaded]);
 
   const aprMayIndices = useMemo(
     () => ({
-      apr: dynamicLists.months.findIndex(
+      apr: visibleMonths.findIndex(
         (m: any) => String(m).startsWith("Apr") || String(m).startsWith("เม.ย.")
       ),
-      may: dynamicLists.months.findIndex(
+      may: visibleMonths.findIndex(
         (m: any) => String(m).startsWith("May") || String(m).startsWith("พ.ค.")
       ),
     }),
-    [dynamicLists.months]
+    [visibleMonths]
   );
 
   const generateTableDataFromStats = (field: any) => {
@@ -1803,7 +1810,7 @@ export default function App() {
     const fieldStats = aggregatedStats[field];
     const statsEntries = Object.entries(fieldStats);
     let tableTotalCalls = 0;
-    const numMonths = dynamicLists.months.length;
+    const numMonths = visibleMonths.length;
     const tableMonthlyTotals = new Array(numMonths).fill(0);
 
     // ใช้ forEach เลี่ยง Loop Protection
@@ -1900,11 +1907,11 @@ export default function App() {
     if (!isDataLoaded) return { products: [], systems: [] };
     const pMap: any = {},
       sMap: any = {};
-    const numMonths = dynamicLists.months.length;
+    const numMonths = visibleMonths.length;
     const monthToIndex: any = {};
     
     // เปลี่ยนมาใช้ .forEach() แทน For Loop
-    dynamicLists.months.forEach((m: any, i: number) => {
+    visibleMonths.forEach((m: any, i: number) => {
       monthToIndex[m] = i;
     });
       
@@ -1929,7 +1936,7 @@ export default function App() {
         }))
         .sort((a: any, b: any) => b.total - a.total);
     return { products: formatData(pMap), systems: formatData(sMap) };
-  }, [dashboardFilteredRecords, dynamicLists.months, isDataLoaded]);
+  }, [dashboardFilteredRecords, visibleMonths, isDataLoaded]);
 
   const topIssuesKPI = useMemo(() => {
     if (!isDataLoaded || chartAggregatedData.systems.length === 0) return [];
@@ -1990,22 +1997,22 @@ export default function App() {
   }, [aggregatedStats, dynamicLists.branches, branchSearch, isDataLoaded]);
 
   const getTrendHeader = () => {
-    const len = dynamicLists.months.length;
+    const len = visibleMonths.length;
     if (len >= 3)
       return `%แนวโน้ม\n${
-        formatMonthThaiSplit(dynamicLists.months[len - 2]).m
-      } VS\n${formatMonthThaiSplit(dynamicLists.months[len - 3]).m}`;
+        formatMonthThaiSplit(visibleMonths[len - 2]).m
+      } VS\n${formatMonthThaiSplit(visibleMonths[len - 3]).m}`;
     return `%แนวโน้ม`;
   };
 
   const monthlySummaryData = useMemo(() => {
     if (!isDataLoaded) return [];
-    return dynamicLists.months.map((m: any) => {
+    return visibleMonths.map((m: any) => {
       const filtered = dashboardFilteredRecords.filter((r: any) => r.month === m);
       const total = filtered.reduce((sum: any, r: any) => sum + r.calls, 0);
       return { month: m, total: total };
     });
-  }, [dashboardFilteredRecords, dynamicLists.months, isDataLoaded]);
+  }, [dashboardFilteredRecords, visibleMonths, isDataLoaded]);
 
   const renderDropdowns = () => {
     const configs = [
@@ -2036,7 +2043,7 @@ export default function App() {
     const visibleRows = (tableDef.data || []).slice(0, limit);
     const hasMore = (tableDef.data || []).length > limit;
     const grandTotal = (tableDef.data || []).reduce((acc: any, row: any) => acc + (row?.total || 0), 0);
-    const grandMonthly = Array(dynamicLists.months.length).fill(0);
+    const grandMonthly = Array(visibleMonths.length).fill(0);
     let grandForecast = 0;
 
     (tableDef.data || []).forEach((row: any) => {
@@ -2099,7 +2106,7 @@ export default function App() {
                       <span className="whitespace-nowrap">รวม CALLS</span>
                     </div>
                   </th>
-                  {dynamicLists.months.map((m: any) => {
+                  {visibleMonths.map((m: any) => {
                     const thDate = formatMonthThaiSplit(m);
                     return (
                       <th
@@ -2117,7 +2124,7 @@ export default function App() {
                   <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
                     <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      {dynamicLists.months.length > 0
+                      {visibleMonths.length > 0
                         ? `(หาร ${latestMonthMaxDay} วัน * 30)`
                         : ""}
                     </div>
@@ -2249,7 +2256,7 @@ export default function App() {
                 ) : (
                   <tr>
                     <td
-                      colSpan={dynamicLists.months.length + 5}
+                      colSpan={visibleMonths.length + 5}
                       className="text-center py-8 text-slate-400 font-bold text-base"
                     >
                       ไม่พบข้อมูล
@@ -2498,7 +2505,7 @@ export default function App() {
     (acc: any, row: any) => acc + (row?.total || 0),
     0
   );
-  const grandBranchMonthly = Array(dynamicLists.months.length).fill(0);
+  const grandBranchMonthly = Array(visibleMonths.length).fill(0);
   branchTableData.forEach((row: any) => {
     if(row) (row?.monthly || []).forEach((val: any, i: any) => (grandBranchMonthly[i] += val));
   });
@@ -2559,7 +2566,23 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 mt-8">
+      <style>{`
+        .dashboard-fit table { table-layout: fixed; width: 100%; white-space: normal; }
+        .dashboard-fit table th, .dashboard-fit table td {
+          min-width: 0 !important; max-width: none !important;
+          padding: 10px 3px !important; overflow-wrap: anywhere;
+          font-size: clamp(9px, .75vw, 12px);
+        }
+        .dashboard-fit table th:first-child, .dashboard-fit table td:first-child { width: 15%; padding-left: 8px !important; }
+        .dashboard-fit table th:nth-child(2), .dashboard-fit table td:nth-child(2) { width: 8%; }
+        .dashboard-fit table th:last-child, .dashboard-fit table td:last-child { width: 9%; }
+        .dashboard-fit table td div, .dashboard-fit table th div { font-size: inherit !important; min-width: 0 !important; }
+        .dashboard-fit table td .text-xl { font-size: clamp(11px, 1vw, 16px) !important; }
+        .dashboard-fit table td svg { max-width: 100%; height: auto; }
+        .dashboard-fit svg { min-width: 0 !important; }
+        .dashboard-fit table .truncate { white-space: normal; }
+      `}</style>
+      <main className="dashboard-fit w-full max-w-[1800px] mx-auto px-3 md:px-5 mt-6">
         {activeTab === "overview" && (
           <>
             {/* ================= FILTERS PANEL ================= */}
@@ -2622,7 +2645,7 @@ export default function App() {
             <section className="mb-8 text-left">
               <TrendLineChart
                 data={top5ProductsForTrend}
-                months={dynamicLists.months}
+                months={visibleMonths}
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:break-inside-avoid">
                 <ParetoChart
@@ -2721,7 +2744,7 @@ export default function App() {
                         <th className="px-4 py-4 text-center bg-slate-200/60 dark:bg-slate-700/60 font-extrabold">
                           รวม CALL
                         </th>
-                        {dynamicLists.months.map((m: any) => (
+                        {visibleMonths.map((m: any) => (
                           <th key={m} className="px-2 py-4 text-center min-w-[60px]">
                             {formatMonthThaiSplit(m).m}
                           </th>
@@ -2836,7 +2859,7 @@ export default function App() {
                       ) : (
                         <tr>
                           <td
-                            colSpan={dynamicLists.months.length + 5}
+                            colSpan={visibleMonths.length + 5}
                             className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold text-base"
                           >
                             ไม่พบข้อมูลสาขาที่ค้นหา
