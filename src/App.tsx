@@ -3033,4 +3033,16 @@ export default function App() {
                   </button>
                 </div>
                   {isProcessing && (
- 
+                    <span className="text-sm font-bold text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-4">
+                      <RefreshCw className="w-4 h-4 animate-spin" />{" "}
+                      กำลังประมวลผล...
+                    </span>
+                  )}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
