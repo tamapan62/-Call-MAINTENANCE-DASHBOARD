@@ -1716,6 +1716,32 @@ export default function App() {
     return maxDay;
   }, [rawData, visibleMonths, isDataLoaded]);
 
+  const isLatestMonthClosed = useMemo(() => {
+    const selectedMonth = visibleMonths[visibleMonths.length - 1];
+    if (!selectedMonth) return false;
+    // A month preceding a later month in the file is already closed.
+    const fileMonthIndex = dynamicLists.months.indexOf(selectedMonth);
+    if (fileMonthIndex >= 0 && fileMonthIndex < dynamicLists.months.length - 1) return true;
+    return rawData.some((record: any) => {
+      if (record.month !== selectedMonth) return false;
+      const text = String(record.rawCreateDate || '').trim();
+      const local = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
+      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s|$)/);
+      if (!local && !iso) return false;
+      let year = Number(local ? local[3] : iso![1]);
+      if (year > 2400) year -= 543;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const th = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      const monthIndex = months.findIndex((m, i) => String(selectedMonth).startsWith(m) || String(selectedMonth).startsWith(th[i]));
+      if (monthIndex < 0) return false;
+      const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+      return local
+        ? (Number(local[1]) === lastDay && Number(local[2]) === monthIndex + 1) || (Number(local[2]) === lastDay && Number(local[1]) === monthIndex + 1)
+        : Number(iso![2]) === monthIndex + 1 && Number(iso![3]) === lastDay;
+    });
+  }, [rawData, visibleMonths, dynamicLists.months]);
+  const showForecast = !isLatestMonthClosed;
+
   const aggregatedStats = useMemo(() => {
     if (!isDataLoaded) return {};
     const months = visibleMonths;
@@ -1834,7 +1860,11 @@ export default function App() {
             : 0;
         let trend = 0;
         const { apr: aprIdx, may: mayIdx } = aprMayIndices;
-        if (aprIdx !== -1 && mayIdx !== -1) {
+        if (isLatestMonthClosed && len >= 2) {
+          const previous = monthlyVals[len - 2] || 0;
+          const latest = monthlyVals[len - 1] || 0;
+          trend = previous > 0 ? ((latest - previous) / previous) * 100 : latest > 0 ? 100 : 0;
+        } else if (aprIdx !== -1 && mayIdx !== -1) {
           const aprVal = monthlyVals[aprIdx] || 0;
           const mayVal = monthlyVals[mayIdx] || 0;
           if (aprVal > 0) trend = ((mayVal - aprVal) / aprVal) * 100;
@@ -1876,31 +1906,31 @@ export default function App() {
 
   const productTypeTableData = useMemo(
     () => generateTableDataFromStats("product"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const problemTableData = useMemo(
     () => generateTableDataFromStats("problem"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const systemTableData = useMemo(
     () => generateTableDataFromStats("system"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const damagedPartTableData = useMemo(
     () => generateTableDataFromStats("damagedPart"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const causeTableData = useMemo(
     () => generateTableDataFromStats("cause"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const areaTableData = useMemo(
     () => generateTableDataFromStats("area"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
   const teamTableData = useMemo(
     () => generateTableDataFromStats("team"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded]
+    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
   );
 
   const chartAggregatedData = useMemo(() => {
@@ -1998,6 +2028,7 @@ export default function App() {
 
   const getTrendHeader = () => {
     const len = visibleMonths.length;
+    if (isLatestMonthClosed && len >= 2) return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[len - 1]).m} VS\n${formatMonthThaiSplit(visibleMonths[len - 2]).m}`;
     if (len >= 3)
       return `%แนวโน้ม\n${
         formatMonthThaiSplit(visibleMonths[len - 2]).m
@@ -2054,7 +2085,11 @@ export default function App() {
 
     let grandTrend = 0;
     const { apr: aprIdx, may: mayIdx } = aprMayIndices;
-    if (aprIdx !== -1 && mayIdx !== -1) {
+    if (isLatestMonthClosed && grandMonthly.length >= 2) {
+      const previous = grandMonthly[grandMonthly.length - 2] || 0;
+      const latest = grandMonthly[grandMonthly.length - 1] || 0;
+      grandTrend = previous > 0 ? ((latest - previous) / previous) * 100 : latest > 0 ? 100 : 0;
+    } else if (aprIdx !== -1 && mayIdx !== -1) {
       const aprVal = grandMonthly[aprIdx] || 0;
       const mayVal = grandMonthly[mayIdx] || 0;
       if (aprVal > 0) grandTrend = ((mayVal - aprVal) / aprVal) * 100;
@@ -2121,6 +2156,7 @@ export default function App() {
                   <th className="px-3 py-5 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight whitespace-pre-line">
                     {getTrendHeader()}
                   </th>
+{showForecast && <>
                   <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
                     <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
@@ -2132,6 +2168,7 @@ export default function App() {
                   <th className="px-4 py-4 border-l border-slate-200 dark:border-slate-700 min-w-[150px] text-center">
                     กราฟประมาณการเดือนล่าสุด
                   </th>
+</>}
                 </tr>
               </thead>
               <tbody className="text-sm">
@@ -2239,6 +2276,7 @@ export default function App() {
                             {(row?.trend || 0).toFixed(2)}%
                           </div>
                         </td>
+{showForecast && <>
                         <td className="px-3 py-4 text-center bg-transparent border-l border-slate-100 dark:border-slate-700/50">
                           <div className="font-extrabold text-[16px] text-indigo-700 dark:text-indigo-400">
                             {(row?.forecast || 0).toLocaleString()}
@@ -2250,13 +2288,14 @@ export default function App() {
                             forecast={row?.forecast || 0}
                           />
                         </td>
+</>}
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
                     <td
-                      colSpan={visibleMonths.length + 5}
+                      colSpan={visibleMonths.length + (showForecast ? 5 : 3)}
                       className="text-center py-8 text-slate-400 font-bold text-base"
                     >
                       ไม่พบข้อมูล
@@ -2329,6 +2368,7 @@ export default function App() {
                         {(grandTrend || 0).toFixed(2)}%
                       </div>
                     </td>
+{showForecast && <>
                     <td className="px-3 py-4 text-center border-l border-indigo-200/60 dark:border-slate-700 align-middle">
                       <div className="font-black text-[16px] text-indigo-900 dark:text-indigo-300">
                         {(grandForecast || 0).toLocaleString()}
@@ -2337,6 +2377,7 @@ export default function App() {
                     <td className="px-4 py-3 border-l border-indigo-200/60 dark:border-slate-700 align-middle text-center">
                       <Sparkline data={grandMonthly} forecast={grandForecast} />
                     </td>
+</>}
                   </tr>
                 </tfoot>
               )}
@@ -2571,13 +2612,13 @@ export default function App() {
         .dashboard-fit table th, .dashboard-fit table td {
           min-width: 0 !important; max-width: none !important;
           padding: 10px 3px !important; overflow-wrap: anywhere;
-          font-size: clamp(9px, .75vw, 12px);
+          font-size: clamp(11px, .95vw, 14px);
         }
         .dashboard-fit table th:first-child, .dashboard-fit table td:first-child { width: 15%; padding-left: 8px !important; }
         .dashboard-fit table th:nth-child(2), .dashboard-fit table td:nth-child(2) { width: 8%; }
         .dashboard-fit table th:last-child, .dashboard-fit table td:last-child { width: 9%; }
         .dashboard-fit table td div, .dashboard-fit table th div { font-size: inherit !important; min-width: 0 !important; }
-        .dashboard-fit table td .text-xl { font-size: clamp(11px, 1vw, 16px) !important; }
+        .dashboard-fit table td .text-xl { font-size: clamp(13px, 1.15vw, 18px) !important; }
         .dashboard-fit table td svg { max-width: 100%; height: auto; }
         .dashboard-fit svg { min-width: 0 !important; }
         .dashboard-fit table .truncate { white-space: normal; }
@@ -2859,7 +2900,7 @@ export default function App() {
                       ) : (
                         <tr>
                           <td
-                            colSpan={visibleMonths.length + 5}
+                            colSpan={visibleMonths.length + (showForecast ? 5 : 3)}
                             className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold text-base"
                           >
                             ไม่พบข้อมูลสาขาที่ค้นหา
