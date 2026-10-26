@@ -795,10 +795,8 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
                 cx={getX(i)}
                 cy={getRightY(d?.cumPercent || 0)}
                 r="5"
-                fill="currentColor"
-                className="text-white dark:text-slate-800"
-                stroke="currentColor"
-                style={{ stroke: 'var(--tw-text-opacity, 1) rgba(244, 63, 94, 1)' }} // Fallback rose-500
+                fill="#f43f5e"
+                stroke="#be123c"
                 strokeWidth="2.5"
               />
             </g>
