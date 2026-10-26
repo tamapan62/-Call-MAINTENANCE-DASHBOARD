@@ -637,6 +637,13 @@ const TrendLineChart = ({ data, months }: any) => {
 const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
   const topData = useMemo(() => (data || []).slice(0, 15), [data]);
   if (topData.length === 0) return null;
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [expanded]);
 
   const totalSum = useMemo(
     () => topData.reduce((sum: any, d: any) => sum + (d?.total || 0), 0),
@@ -658,6 +665,9 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
   const width = 500,
     height = 270,
     padding = { top: 40, right: 50, bottom: 35, left: 55 };
+  const width = expanded ? 1100 : 600,
+    height = expanded ? 590 : 390,
+    padding = { top: 55, right: 55, bottom: expanded ? 180 : 125, left: 65 };
   const innerWidth = width - padding.left - padding.right,
     innerHeight = height - padding.top - padding.bottom;
   const xStep = innerWidth / (chartData.length || 1);
@@ -674,8 +684,13 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
     [chartData]
   );
 
+    [chartData, width, height]
+  );
+
+  if (topData.length === 0) return null;
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 w-full flex flex-col transition-colors">
+    <div role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined} className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 flex flex-col transition-colors ${expanded ? "fixed inset-3 z-50 overflow-auto shadow-2xl" : "w-full"}`}>
       <div className="flex justify-between items-start mb-5">
         <div>
           <h4 className="font-bold text-slate-800 dark:text-slate-100 text-base">{title}</h4>
@@ -685,6 +700,10 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
           {Icon && <Icon className="w-6 h-6" />}
         </div>
       </div>
+      <label className="flex items-center gap-2 self-end text-sm font-semibold text-indigo-600 dark:text-indigo-300 mb-4 cursor-pointer">
+        <input type="checkbox" checked={expanded} onChange={(event) => setExpanded(event.target.checked)} className="w-4 h-4" />
+        ดูกราฟขนาดเต็ม
+      </label>
       <div className="flex justify-center gap-6 text-sm font-bold mb-5">
         <span className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
           <span className="w-3.5 h-3.5 bg-indigo-600 dark:bg-indigo-400 rounded-sm"></span> จำนวน (Count)
@@ -732,8 +751,13 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
                 />
                 <text x={getX(i)} y={padding.top + innerHeight + 22}
                   textAnchor="middle" fontSize="12" fill="currentColor"
+                <text x={getX(i)} y={padding.top + innerHeight + 18}
+                  textAnchor="end" fontSize={expanded ? 13 : 11} fill="currentColor"
+                  transform={`rotate(-55 ${getX(i)},${padding.top + innerHeight + 18})`}
                   className="text-slate-600 dark:text-slate-300" fontWeight="bold">
                   {i + 1}
+                  <title>{safeName}</title>
+                  {Array.from(safeName).length > (expanded ? 32 : 18) ? Array.from(safeName).slice(0, expanded ? 32 : 18).join('') + '…' : safeName}
                 </text>
               </g>
             );
@@ -751,9 +775,11 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
             <g key={`cum-${i}`}>
               <title>{`${d.name}: สะสม ${(d.cumPercent || 0).toFixed(1)}%`}</title>
               {(i % 3 === 0 || i === chartData.length - 1) && <>
+              <>
               <text
                 x={getX(i)}
                 y={getRightY(d?.cumPercent || 0) - 12}
+                y={getRightY(d?.cumPercent || 0) - (i % 2 === 0 ? 14 : 34)}
                 textAnchor="middle"
                 fontSize="12"
                 fontWeight="extrabold"
@@ -767,6 +793,7 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
               <text
                 x={getX(i)}
                 y={getRightY(d?.cumPercent || 0) - 12}
+                y={getRightY(d?.cumPercent || 0) - (i % 2 === 0 ? 14 : 34)}
                 textAnchor="middle"
                 fontSize="12"
                 fontWeight="extrabold"
@@ -776,6 +803,7 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
                 {(d?.cumPercent || 0).toFixed(1)}%
               </text>
               </>}
+              </>
               <circle
                 cx={getX(i)}
                 cy={getRightY(d?.cumPercent || 0)}
@@ -834,6 +862,7 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
           </li>
         ))}
       </ol>
+
     </div>
   );
 };
