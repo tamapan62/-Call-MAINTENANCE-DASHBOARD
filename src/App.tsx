@@ -1831,6 +1831,20 @@ export default function App() {
     [visibleMonths]
   );
 
+  // Use the same month pair for the label, each row and Grand Total.
+  const trendMonthIndices = useMemo(() => {
+    const latest = visibleMonths.length - (isLatestMonthClosed ? 1 : 2);
+    return { previous: latest - 1, latest };
+  }, [visibleMonths, isLatestMonthClosed]);
+
+  const calculateTrend = (values: number[]) => {
+    const { previous, latest } = trendMonthIndices;
+    if (previous < 0 || latest < 0) return 0;
+    const before = values[previous] || 0;
+    const after = values[latest] || 0;
+    return before > 0 ? ((after - before) / before) * 100 : after > 0 ? 100 : 0;
+  };
+
   const generateTableDataFromStats = (field: any) => {
     if (!isDataLoaded || !aggregatedStats[field]) return [];
     const fieldStats = aggregatedStats[field];
@@ -1875,6 +1889,8 @@ export default function App() {
           if (p1 > 0) trend = ((p2 - p1) / p1) * 100;
         }
 
+        const trend = calculateTrend(monthlyVals);
+
         const monthlyDetails: any[] = [];
         // ใช้ Array.from.forEach แทน for loop
         Array.from({ length: numMonths }).forEach((_, idx) => {
@@ -1907,30 +1923,37 @@ export default function App() {
   const productTypeTableData = useMemo(
     () => generateTableDataFromStats("product"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const problemTableData = useMemo(
     () => generateTableDataFromStats("problem"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const systemTableData = useMemo(
     () => generateTableDataFromStats("system"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const damagedPartTableData = useMemo(
     () => generateTableDataFromStats("damagedPart"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const causeTableData = useMemo(
     () => generateTableDataFromStats("cause"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const areaTableData = useMemo(
     () => generateTableDataFromStats("area"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const teamTableData = useMemo(
     () => generateTableDataFromStats("team"),
     [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
+    [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
 
   const chartAggregatedData = useMemo(() => {
@@ -2036,6 +2059,12 @@ export default function App() {
     return `%แนวโน้ม`;
   };
 
+  const getTrendHeader = () => {
+    const { previous, latest } = trendMonthIndices;
+    if (previous < 0 || latest < 0) return '%แนวโน้ม';
+    return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[latest]).m} VS\n${formatMonthThaiSplit(visibleMonths[previous]).m}`;
+  };
+
   const monthlySummaryData = useMemo(() => {
     if (!isDataLoaded) return [];
     return visibleMonths.map((m: any) => {
@@ -2100,6 +2129,8 @@ export default function App() {
       const p2 = grandMonthly[len - 2] || 0;
       if (p1 > 0) grandTrend = ((p2 - p1) / p1) * 100;
     }
+
+    const grandTrend = calculateTrend(grandMonthly);
 
     return (
       <div
