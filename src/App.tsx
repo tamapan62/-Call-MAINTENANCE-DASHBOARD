@@ -656,8 +656,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
   );
 
   const width = 500,
-    height = 320,
-    padding = { top: 30, right: 50, bottom: 100, left: 55 };
     height = 270,
     padding = { top: 40, right: 50, bottom: 35, left: 55 };
   const innerWidth = width - padding.left - padding.right,
@@ -698,7 +696,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
       <div className="flex-1 w-full relative">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-full overflow-visible"
           className="w-full h-auto overflow-visible"
         >
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
@@ -723,7 +720,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
             const safeName = d?.name || "";
             return (
               <g key={`bar-${i}`} className="group">
-              <g key={`bar-${i}`} className="group">
                 <title>{`${safeName}: ${(d.total || 0).toLocaleString()} Calls · สะสม ${(d.cumPercent || 0).toFixed(1)}%`}</title>
                 <rect
                   x={getX(i) - barWidth / 2}
@@ -734,22 +730,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
                   rx="4"
                   className="text-indigo-600 dark:text-indigo-500 transition-all duration-300 hover:text-indigo-500 dark:hover:text-indigo-400"
                 />
-                <text
-                  x={getX(i)}
-                  y={padding.top + innerHeight + 18}
-                  textAnchor="end"
-                  fontSize="12"
-                  fill="currentColor"
-                  className="text-slate-500 dark:text-slate-400"
-                  transform={`rotate(-40 ${getX(i)},${
-                    padding.top + innerHeight + 18
-                  })`}
-                  style={{ whiteSpace: "pre" }}
-                  fontWeight="bold"
-                >
-                  {safeName.length > 18
-                    ? safeName.substring(0, 18) + "..."
-                    : safeName}
                 <text x={getX(i)} y={padding.top + innerHeight + 22}
                   textAnchor="middle" fontSize="12" fill="currentColor"
                   className="text-slate-600 dark:text-slate-300" fontWeight="bold">
@@ -768,7 +748,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
           {chartData.map((d: any, i: any) => {
             if (!d) return null;
             return (
-            <g key={`cum-${i}`}>
             <g key={`cum-${i}`}>
               <title>{`${d.name}: สะสม ${(d.cumPercent || 0).toFixed(1)}%`}</title>
               {(i % 3 === 0 || i === chartData.length - 1) && <>
@@ -845,8 +824,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
               </text>
             );
           })}
-        </svg>
-      </div>
         </svg>
       </div>
       <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 mt-3 pt-4 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200">
