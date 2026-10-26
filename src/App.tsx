@@ -1691,6 +1691,13 @@ export default function App() {
     return dynamicLists.months.filter((month: string) => selected.has(month));
   }, [dynamicLists.months, filterMonth]);
 
+  // Keep the complete month list in the filter; use selected months throughout charts and tables.
+  const visibleMonths = useMemo(() => {
+    if (filterMonth.length === 0) return dynamicLists.months;
+    const selected = new Set(filterMonth);
+    return dynamicLists.months.filter((month: string) => selected.has(month));
+  }, [dynamicLists.months, filterMonth]);
+
   const latestMonthMaxDay = useMemo(() => {
     if (!isDataLoaded || visibleMonths.length === 0) return 1;
     const latestMonth = visibleMonths[visibleMonths.length - 1];
@@ -1715,6 +1722,32 @@ export default function App() {
     });
     return maxDay;
   }, [rawData, visibleMonths, isDataLoaded]);
+
+  const isLatestMonthClosed = useMemo(() => {
+    const selectedMonth = visibleMonths[visibleMonths.length - 1];
+    if (!selectedMonth) return false;
+    // A month preceding a later month in the file is already closed.
+    const fileMonthIndex = dynamicLists.months.indexOf(selectedMonth);
+    if (fileMonthIndex >= 0 && fileMonthIndex < dynamicLists.months.length - 1) return true;
+    return rawData.some((record: any) => {
+      if (record.month !== selectedMonth) return false;
+      const text = String(record.rawCreateDate || '').trim();
+      const local = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
+      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s|$)/);
+      if (!local && !iso) return false;
+      let year = Number(local ? local[3] : iso![1]);
+      if (year > 2400) year -= 543;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const th = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      const monthIndex = months.findIndex((m, i) => String(selectedMonth).startsWith(m) || String(selectedMonth).startsWith(th[i]));
+      if (monthIndex < 0) return false;
+      const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+      return local
+        ? (Number(local[1]) === lastDay && Number(local[2]) === monthIndex + 1) || (Number(local[2]) === lastDay && Number(local[1]) === monthIndex + 1)
+        : Number(iso![2]) === monthIndex + 1 && Number(iso![3]) === lastDay;
+    });
+  }, [rawData, visibleMonths, dynamicLists.months]);
+  const showForecast = !isLatestMonthClosed;
 
   const isLatestMonthClosed = useMemo(() => {
     const selectedMonth = visibleMonths[visibleMonths.length - 1];
@@ -1819,19 +1852,20 @@ export default function App() {
     return structures;
   }, [globalFilteredRecords, crossFilters, visibleMonths, isDataLoaded]);
 
-  const aprMayIndices = useMemo(
-    () => ({
-      apr: visibleMonths.findIndex(
-        (m: any) => String(m).startsWith("Apr") || String(m).startsWith("เม.ย.")
-      ),
-      may: visibleMonths.findIndex(
-        (m: any) => String(m).startsWith("May") || String(m).startsWith("พ.ค.")
-      ),
-    }),
-    [visibleMonths]
-  );
-
   // Use the same month pair for the label, each row and Grand Total.
+  const trendMonthIndices = useMemo(() => {
+    const latest = visibleMonths.length - (isLatestMonthClosed ? 1 : 2);
+    return { previous: latest - 1, latest };
+  }, [visibleMonths, isLatestMonthClosed]);
+
+  const calculateTrend = (values: number[]) => {
+    const { previous, latest } = trendMonthIndices;
+    if (previous < 0 || latest < 0) return 0;
+    const before = values[previous] || 0;
+    const after = values[latest] || 0;
+    return before > 0 ? ((after - before) / before) * 100 : after > 0 ? 100 : 0;
+  };
+
   const trendMonthIndices = useMemo(() => {
     const latest = visibleMonths.length - (isLatestMonthClosed ? 1 : 2);
     return { previous: latest - 1, latest };
@@ -1872,22 +1906,7 @@ export default function App() {
           len > 0
             ? Math.round(((monthlyVals[len - 1] || 0) / latestMonthMaxDay) * 30)
             : 0;
-        let trend = 0;
-        const { apr: aprIdx, may: mayIdx } = aprMayIndices;
-        if (isLatestMonthClosed && len >= 2) {
-          const previous = monthlyVals[len - 2] || 0;
-          const latest = monthlyVals[len - 1] || 0;
-          trend = previous > 0 ? ((latest - previous) / previous) * 100 : latest > 0 ? 100 : 0;
-        } else if (aprIdx !== -1 && mayIdx !== -1) {
-          const aprVal = monthlyVals[aprIdx] || 0;
-          const mayVal = monthlyVals[mayIdx] || 0;
-          if (aprVal > 0) trend = ((mayVal - aprVal) / aprVal) * 100;
-          else if (mayVal > 0) trend = 100;
-        } else if (len >= 3) {
-          const p1 = monthlyVals[len - 3] || 0;
-          const p2 = monthlyVals[len - 2] || 0;
-          if (p1 > 0) trend = ((p2 - p1) / p1) * 100;
-        }
+        const trend = calculateTrend(monthlyVals);
 
         const trend = calculateTrend(monthlyVals);
 
@@ -1922,37 +1941,30 @@ export default function App() {
 
   const productTypeTableData = useMemo(
     () => generateTableDataFromStats("product"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const problemTableData = useMemo(
     () => generateTableDataFromStats("problem"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const systemTableData = useMemo(
     () => generateTableDataFromStats("system"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const damagedPartTableData = useMemo(
     () => generateTableDataFromStats("damagedPart"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const causeTableData = useMemo(
     () => generateTableDataFromStats("cause"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const areaTableData = useMemo(
     () => generateTableDataFromStats("area"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
   const teamTableData = useMemo(
     () => generateTableDataFromStats("team"),
-    [aggregatedStats, latestMonthMaxDay, aprMayIndices, isDataLoaded, isLatestMonthClosed]
     [aggregatedStats, latestMonthMaxDay, trendMonthIndices, isDataLoaded, isLatestMonthClosed]
   );
 
@@ -2050,13 +2062,9 @@ export default function App() {
   }, [aggregatedStats, dynamicLists.branches, branchSearch, isDataLoaded]);
 
   const getTrendHeader = () => {
-    const len = visibleMonths.length;
-    if (isLatestMonthClosed && len >= 2) return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[len - 1]).m} VS\n${formatMonthThaiSplit(visibleMonths[len - 2]).m}`;
-    if (len >= 3)
-      return `%แนวโน้ม\n${
-        formatMonthThaiSplit(visibleMonths[len - 2]).m
-      } VS\n${formatMonthThaiSplit(visibleMonths[len - 3]).m}`;
-    return `%แนวโน้ม`;
+    const { previous, latest } = trendMonthIndices;
+    if (previous < 0 || latest < 0) return '%แนวโน้ม';
+    return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[latest]).m} VS\n${formatMonthThaiSplit(visibleMonths[previous]).m}`;
   };
 
   const getTrendHeader = () => {
@@ -2112,23 +2120,7 @@ export default function App() {
       grandForecast += row?.forecast || 0;
     });
 
-    let grandTrend = 0;
-    const { apr: aprIdx, may: mayIdx } = aprMayIndices;
-    if (isLatestMonthClosed && grandMonthly.length >= 2) {
-      const previous = grandMonthly[grandMonthly.length - 2] || 0;
-      const latest = grandMonthly[grandMonthly.length - 1] || 0;
-      grandTrend = previous > 0 ? ((latest - previous) / previous) * 100 : latest > 0 ? 100 : 0;
-    } else if (aprIdx !== -1 && mayIdx !== -1) {
-      const aprVal = grandMonthly[aprIdx] || 0;
-      const mayVal = grandMonthly[mayIdx] || 0;
-      if (aprVal > 0) grandTrend = ((mayVal - aprVal) / aprVal) * 100;
-      else if (mayVal > 0) grandTrend = 100;
-    } else if (grandMonthly.length >= 3) {
-      const len = grandMonthly.length;
-      const p1 = grandMonthly[len - 3] || 0;
-      const p2 = grandMonthly[len - 2] || 0;
-      if (p1 > 0) grandTrend = ((p2 - p1) / p1) * 100;
-    }
+    const grandTrend = calculateTrend(grandMonthly);
 
     const grandTrend = calculateTrend(grandMonthly);
 
@@ -2188,6 +2180,7 @@ export default function App() {
                     {getTrendHeader()}
                   </th>
 {showForecast && <>
+{showForecast && <>
                   <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
                     <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
@@ -2198,6 +2191,7 @@ export default function App() {
                   </th>
                   <th className="px-4 py-4 border-l border-slate-200 dark:border-slate-700 min-w-[150px] text-center">
                     กราฟประมาณการเดือนล่าสุด
+                  </th>
                   </th>
 </>}
                 </tr>
@@ -2308,6 +2302,7 @@ export default function App() {
                           </div>
                         </td>
 {showForecast && <>
+{showForecast && <>
                         <td className="px-3 py-4 text-center bg-transparent border-l border-slate-100 dark:border-slate-700/50">
                           <div className="font-extrabold text-[16px] text-indigo-700 dark:text-indigo-400">
                             {(row?.forecast || 0).toLocaleString()}
@@ -2318,6 +2313,7 @@ export default function App() {
                             data={row?.monthly || []}
                             forecast={row?.forecast || 0}
                           />
+                        </td>
                         </td>
 </>}
                       </tr>
@@ -2400,6 +2396,7 @@ export default function App() {
                       </div>
                     </td>
 {showForecast && <>
+{showForecast && <>
                     <td className="px-3 py-4 text-center border-l border-indigo-200/60 dark:border-slate-700 align-middle">
                       <div className="font-black text-[16px] text-indigo-900 dark:text-indigo-300">
                         {(grandForecast || 0).toLocaleString()}
@@ -2407,6 +2404,7 @@ export default function App() {
                     </td>
                     <td className="px-4 py-3 border-l border-indigo-200/60 dark:border-slate-700 align-middle text-center">
                       <Sparkline data={grandMonthly} forecast={grandForecast} />
+                    </td>
                     </td>
 </>}
                   </tr>
@@ -2638,6 +2636,22 @@ export default function App() {
         </div>
       </header>
 
+      <style>{`
+        .dashboard-fit table { table-layout: fixed; width: 100%; white-space: normal; }
+        .dashboard-fit table th, .dashboard-fit table td {
+          min-width: 0 !important; max-width: none !important;
+          padding: 10px 3px !important; overflow-wrap: anywhere;
+          font-size: clamp(11px, .95vw, 14px);
+        }
+        .dashboard-fit table th:first-child, .dashboard-fit table td:first-child { width: 15%; padding-left: 8px !important; }
+        .dashboard-fit table th:nth-child(2), .dashboard-fit table td:nth-child(2) { width: 8%; }
+        .dashboard-fit table th:last-child, .dashboard-fit table td:last-child { width: 9%; }
+        .dashboard-fit table td div, .dashboard-fit table th div { font-size: inherit !important; min-width: 0 !important; }
+        .dashboard-fit table td .text-xl { font-size: clamp(13px, 1.15vw, 18px) !important; }
+        .dashboard-fit table td svg { max-width: 100%; height: auto; }
+        .dashboard-fit svg { min-width: 0 !important; }
+        .dashboard-fit table .truncate { white-space: normal; }
+      `}</style>
       <style>{`
         .dashboard-fit table { table-layout: fixed; width: 100%; white-space: normal; }
         .dashboard-fit table th, .dashboard-fit table td {
@@ -3076,4 +3090,5 @@ export default function App() {
       </main>
     </div>
   );
+}
 }
