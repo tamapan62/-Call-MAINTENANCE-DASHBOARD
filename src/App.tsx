@@ -636,7 +636,6 @@ const TrendLineChart = ({ data, months }: any) => {
 
 const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
   const topData = useMemo(() => (data || []).slice(0, 15), [data]);
-  if (topData.length === 0) return null;
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (!expanded) return;
@@ -662,9 +661,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
     [chartData]
   );
 
-  const width = 500,
-    height = 270,
-    padding = { top: 40, right: 50, bottom: 35, left: 55 };
   const width = expanded ? 1100 : 600,
     height = expanded ? 590 : 390,
     padding = { top: 55, right: 55, bottom: expanded ? 180 : 125, left: 65 };
@@ -681,15 +677,11 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
       chartData
         .map((d: any, i: any) => `${getX(i)},${getRightY(d?.cumPercent || 0)}`)
         .join(" "),
-    [chartData]
-  );
-
     [chartData, width, height]
   );
 
   if (topData.length === 0) return null;
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 w-full flex flex-col transition-colors">
     <div role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined} className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 flex flex-col transition-colors ${expanded ? "fixed inset-3 z-50 overflow-auto shadow-2xl" : "w-full"}`}>
       <div className="flex justify-between items-start mb-5">
         <div>
@@ -749,13 +741,10 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
                   rx="4"
                   className="text-indigo-600 dark:text-indigo-500 transition-all duration-300 hover:text-indigo-500 dark:hover:text-indigo-400"
                 />
-                <text x={getX(i)} y={padding.top + innerHeight + 22}
-                  textAnchor="middle" fontSize="12" fill="currentColor"
                 <text x={getX(i)} y={padding.top + innerHeight + 18}
                   textAnchor="end" fontSize={expanded ? 13 : 11} fill="currentColor"
                   transform={`rotate(-55 ${getX(i)},${padding.top + innerHeight + 18})`}
                   className="text-slate-600 dark:text-slate-300" fontWeight="bold">
-                  {i + 1}
                   <title>{safeName}</title>
                   {Array.from(safeName).length > (expanded ? 32 : 18) ? Array.from(safeName).slice(0, expanded ? 32 : 18).join('') + '…' : safeName}
                 </text>
@@ -774,11 +763,9 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
             return (
             <g key={`cum-${i}`}>
               <title>{`${d.name}: สะสม ${(d.cumPercent || 0).toFixed(1)}%`}</title>
-              {(i % 3 === 0 || i === chartData.length - 1) && <>
               <>
               <text
                 x={getX(i)}
-                y={getRightY(d?.cumPercent || 0) - 12}
                 y={getRightY(d?.cumPercent || 0) - (i % 2 === 0 ? 14 : 34)}
                 textAnchor="middle"
                 fontSize="12"
@@ -792,7 +779,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
               </text>
               <text
                 x={getX(i)}
-                y={getRightY(d?.cumPercent || 0) - 12}
                 y={getRightY(d?.cumPercent || 0) - (i % 2 === 0 ? 14 : 34)}
                 textAnchor="middle"
                 fontSize="12"
@@ -802,7 +788,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
               >
                 {(d?.cumPercent || 0).toFixed(1)}%
               </text>
-              </>}
               </>
               <circle
                 cx={getX(i)}
@@ -854,14 +839,6 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
           })}
         </svg>
       </div>
-      <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2 mt-3 pt-4 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200">
-        {chartData.map((item: any, index: number) => (
-          <li key={index} className="flex items-start gap-2 min-w-0">
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0">{index + 1}.</span>
-            <span className="min-w-0 break-words">{item.name}</span>
-          </li>
-        ))}
-      </ol>
 
     </div>
   );
