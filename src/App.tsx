@@ -682,8 +682,8 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
 
   if (topData.length === 0) return null;
   return (
-    <div role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined} className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 flex flex-col transition-colors ${expanded ? "fixed inset-3 z-50 overflow-auto shadow-2xl" : "w-full"}`}>
-      <div className="flex justify-between items-start mb-5">
+    <div role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined} aria-label={expanded ? title : undefined} className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 flex flex-col transition-colors ${expanded ? "fixed inset-3 z-50 overflow-hidden shadow-2xl" : "w-full"}`}>
+      <div className="flex justify-between items-start mb-3 shrink-0">
         <div>
           <h4 className="font-bold text-slate-800 dark:text-slate-100 text-base">{title}</h4>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>
@@ -696,7 +696,7 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
         <input type="checkbox" checked={expanded} onChange={(event) => setExpanded(event.target.checked)} className="w-4 h-4" />
         ดูกราฟขนาดเต็ม
       </label>
-      <div className="flex justify-center gap-6 text-sm font-bold mb-5">
+      <div className="flex justify-center gap-6 text-sm font-bold mb-3 shrink-0">
         <span className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
           <span className="w-3.5 h-3.5 bg-indigo-600 dark:bg-indigo-400 rounded-sm"></span> จำนวน (Count)
         </span>
@@ -704,10 +704,12 @@ const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
           <span className="w-3.5 h-3.5 bg-rose-500 dark:bg-rose-400 rounded-full"></span> สะสม (Cumulative %)
         </span>
       </div>
-      <div className="flex-1 w-full relative">
+      <div className={expanded ? "flex-1 min-h-0 w-full relative overflow-hidden" : "w-full relative"}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto overflow-visible"
+          preserveAspectRatio="xMidYMid meet"
+          className={expanded ? "w-full h-full block" : "w-full h-auto overflow-visible"}
+          style={expanded ? { width: "100%", height: "100%", maxHeight: "100%", minHeight: 0 } : undefined}
         >
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = padding.top + innerHeight - ratio * innerHeight;
