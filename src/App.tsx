@@ -1692,11 +1692,7 @@ export default function App() {
   }, [dynamicLists.months, filterMonth]);
 
   // Keep the complete month list in the filter; use selected months throughout charts and tables.
-  const visibleMonths = useMemo(() => {
-    if (filterMonth.length === 0) return dynamicLists.months;
-    const selected = new Set(filterMonth);
-    return dynamicLists.months.filter((month: string) => selected.has(month));
-  }, [dynamicLists.months, filterMonth]);
+  
 
   const latestMonthMaxDay = useMemo(() => {
     if (!isDataLoaded || visibleMonths.length === 0) return 1;
@@ -1749,31 +1745,8 @@ export default function App() {
   }, [rawData, visibleMonths, dynamicLists.months]);
   const showForecast = !isLatestMonthClosed;
 
-  const isLatestMonthClosed = useMemo(() => {
-    const selectedMonth = visibleMonths[visibleMonths.length - 1];
-    if (!selectedMonth) return false;
-    // A month preceding a later month in the file is already closed.
-    const fileMonthIndex = dynamicLists.months.indexOf(selectedMonth);
-    if (fileMonthIndex >= 0 && fileMonthIndex < dynamicLists.months.length - 1) return true;
-    return rawData.some((record: any) => {
-      if (record.month !== selectedMonth) return false;
-      const text = String(record.rawCreateDate || '').trim();
-      const local = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
-      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s|$)/);
-      if (!local && !iso) return false;
-      let year = Number(local ? local[3] : iso![1]);
-      if (year > 2400) year -= 543;
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const th = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-      const monthIndex = months.findIndex((m, i) => String(selectedMonth).startsWith(m) || String(selectedMonth).startsWith(th[i]));
-      if (monthIndex < 0) return false;
-      const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-      return local
-        ? (Number(local[1]) === lastDay && Number(local[2]) === monthIndex + 1) || (Number(local[2]) === lastDay && Number(local[1]) === monthIndex + 1)
-        : Number(iso![2]) === monthIndex + 1 && Number(iso![3]) === lastDay;
-    });
-  }, [rawData, visibleMonths, dynamicLists.months]);
-  const showForecast = !isLatestMonthClosed;
+  
+  
 
   const aggregatedStats = useMemo(() => {
     if (!isDataLoaded) return {};
@@ -1866,18 +1839,9 @@ export default function App() {
     return before > 0 ? ((after - before) / before) * 100 : after > 0 ? 100 : 0;
   };
 
-  const trendMonthIndices = useMemo(() => {
-    const latest = visibleMonths.length - (isLatestMonthClosed ? 1 : 2);
-    return { previous: latest - 1, latest };
-  }, [visibleMonths, isLatestMonthClosed]);
+  
 
-  const calculateTrend = (values: number[]) => {
-    const { previous, latest } = trendMonthIndices;
-    if (previous < 0 || latest < 0) return 0;
-    const before = values[previous] || 0;
-    const after = values[latest] || 0;
-    return before > 0 ? ((after - before) / before) * 100 : after > 0 ? 100 : 0;
-  };
+  
 
   const generateTableDataFromStats = (field: any) => {
     if (!isDataLoaded || !aggregatedStats[field]) return [];
@@ -1908,7 +1872,7 @@ export default function App() {
             : 0;
         const trend = calculateTrend(monthlyVals);
 
-        const trend = calculateTrend(monthlyVals);
+        
 
         const monthlyDetails: any[] = [];
         // ใช้ Array.from.forEach แทน for loop
@@ -2067,11 +2031,7 @@ export default function App() {
     return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[latest]).m} VS\n${formatMonthThaiSplit(visibleMonths[previous]).m}`;
   };
 
-  const getTrendHeader = () => {
-    const { previous, latest } = trendMonthIndices;
-    if (previous < 0 || latest < 0) return '%แนวโน้ม';
-    return `%แนวโน้ม\n${formatMonthThaiSplit(visibleMonths[latest]).m} VS\n${formatMonthThaiSplit(visibleMonths[previous]).m}`;
-  };
+  
 
   const monthlySummaryData = useMemo(() => {
     if (!isDataLoaded) return [];
@@ -2122,7 +2082,7 @@ export default function App() {
 
     const grandTrend = calculateTrend(grandMonthly);
 
-    const grandTrend = calculateTrend(grandMonthly);
+    
 
     return (
       <div
@@ -2180,7 +2140,6 @@ export default function App() {
                     {getTrendHeader()}
                   </th>
 {showForecast && <>
-{showForecast && <>
                   <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
                     <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
                     <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
@@ -2191,7 +2150,6 @@ export default function App() {
                   </th>
                   <th className="px-4 py-4 border-l border-slate-200 dark:border-slate-700 min-w-[150px] text-center">
                     กราฟประมาณการเดือนล่าสุด
-                  </th>
                   </th>
 </>}
                 </tr>
@@ -2302,7 +2260,6 @@ export default function App() {
                           </div>
                         </td>
 {showForecast && <>
-{showForecast && <>
                         <td className="px-3 py-4 text-center bg-transparent border-l border-slate-100 dark:border-slate-700/50">
                           <div className="font-extrabold text-[16px] text-indigo-700 dark:text-indigo-400">
                             {(row?.forecast || 0).toLocaleString()}
@@ -2313,7 +2270,6 @@ export default function App() {
                             data={row?.monthly || []}
                             forecast={row?.forecast || 0}
                           />
-                        </td>
                         </td>
 </>}
                       </tr>
@@ -2396,7 +2352,6 @@ export default function App() {
                       </div>
                     </td>
 {showForecast && <>
-{showForecast && <>
                     <td className="px-3 py-4 text-center border-l border-indigo-200/60 dark:border-slate-700 align-middle">
                       <div className="font-black text-[16px] text-indigo-900 dark:text-indigo-300">
                         {(grandForecast || 0).toLocaleString()}
@@ -2404,7 +2359,6 @@ export default function App() {
                     </td>
                     <td className="px-4 py-3 border-l border-indigo-200/60 dark:border-slate-700 align-middle text-center">
                       <Sparkline data={grandMonthly} forecast={grandForecast} />
-                    </td>
                     </td>
 </>}
                   </tr>
@@ -3090,5 +3044,4 @@ export default function App() {
       </main>
     </div>
   );
-}
 }
