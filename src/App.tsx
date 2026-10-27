@@ -299,41 +299,21 @@ class SimulatedSet {
 }
 
 const getHeatmapCellClasses = (value: any, maxVal: any) => {
-  if (value === 0)
-    return {
-      bg: "bg-white dark:bg-slate-800",
-      textMain: "text-slate-300 dark:text-slate-600",
-      textSub: "text-slate-200 dark:text-slate-700",
-    };
+  if (value === 0) return {
+    bg: "bg-white dark:bg-slate-800",
+    textMain: "text-slate-500 dark:text-slate-400",
+    textSub: "text-slate-500 dark:text-slate-400",
+  };
   const ratio = value / (maxVal || 1);
-  if (ratio < 0.2)
-    return {
-      bg: "bg-[#ffe4e6] dark:bg-rose-900/30",
-      textMain: "text-[#9f1239] dark:text-rose-200",
-      textSub: "text-[#e11d48] dark:text-rose-400",
-    };
-  if (ratio < 0.4)
-    return {
-      bg: "bg-[#fecdd3] dark:bg-rose-800/40",
-      textMain: "text-[#9f1239] dark:text-rose-100",
-      textSub: "text-[#e11d48] dark:text-rose-300",
-    };
-  if (ratio < 0.6)
-    return {
-      bg: "bg-[#fda4af] dark:bg-rose-700/60",
-      textMain: "text-[#881337] dark:text-rose-50",
-      textSub: "text-[#be123c] dark:text-rose-200",
-    };
-  if (ratio < 0.8)
-    return {
-      bg: "bg-[#fb7185] dark:bg-rose-600/80",
-      textMain: "text-white dark:text-white",
-      textSub: "text-[#ffe4e6] dark:text-rose-100",
-    };
+  const bg = ratio < 0.2 ? "bg-[#fff1f2] dark:bg-[#291e2b]"
+    : ratio < 0.4 ? "bg-[#ffe4e6] dark:bg-[#382331]"
+    : ratio < 0.6 ? "bg-[#fecdd3] dark:bg-[#492738]"
+    : ratio < 0.8 ? "bg-[#ffb8c4] dark:bg-[#5b2b40]"
+    : "bg-[#fda4af] dark:bg-[#6b2d45]";
   return {
-    bg: "bg-[#f43f5e] dark:bg-rose-500",
-    textMain: "text-white dark:text-white",
-    textSub: "text-[#ffe4e6] dark:text-rose-100",
+    bg,
+    textMain: "text-[#4c0519] dark:text-[#fff1f2]",
+    textSub: "text-[#701a35] dark:text-[#ffe4e6]",
   };
 };
 
@@ -1157,6 +1137,8 @@ export default function App() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [fileName, setFileName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState("");
   const [loadError, setLoadError] = useState("");
   
   // Theme state
@@ -1684,6 +1666,51 @@ export default function App() {
       return activeFields.every((f) => crossFilters[f].has(r[f]));
     });
   }, [globalFilteredRecords, crossFilters]);
+
+  const handleExportCSV = async () => {
+    if (isExporting || dashboardFilteredRecords.length === 0) return;
+    setIsExporting(true);
+    setExportStatus("กำลังเตรียมไฟล์ CSV...");
+    const columns = [
+      ["Ticket Number", "id"], ["Create Date", "rawCreateDate"],
+      ["Equipment", "equipment"], ["Month", "month"],
+      ["Product Type", "product"], ["Problem Type", "problem"],
+      ["System", "system"], ["Damaged Parts", "damagedPart"],
+      ["Cause", "cause"], ["Area", "area"], ["Team", "team"],
+      ["Store Code", "storeCode"], ["Store Name", "storeName"], ["Calls", "calls"],
+    ];
+    const escapeCell = (value: any) => {
+      let text = String(value ?? "");
+      if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    try {
+      const rows = dashboardFilteredRecords.slice();
+      const chunks: string[] = ["\uFEFF", columns.map(([header]) => escapeCell(header)).join(",") + "\r\n"];
+      for (let offset = 0; offset < rows.length; offset += 5000) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        chunks.push(rows.slice(offset, offset + 5000).map((row: any) =>
+          columns.map(([, key]) => escapeCell(row[key])).join(",")
+        ).join("\r\n") + "\r\n");
+      }
+      const blob = new Blob(chunks, { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const name = (fileName || "maintenance-dashboard").replace(/\.csv$/i, "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
+      link.href = url;
+      link.download = name + "-filtered.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      setExportStatus("เตรียมไฟล์แล้ว " + rows.length.toLocaleString() + " แถว");
+    } catch (error) {
+      console.error("CSV export failed", error);
+      setExportStatus("สร้างไฟล์ CSV ไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const totalCallsCount = useMemo(
     () => dashboardFilteredRecords.reduce((acc: any, curr: any) => acc + curr.calls, 0),
@@ -2220,7 +2247,7 @@ export default function App() {
                               key={mIdx}
                               className={`px-2 py-4 text-center transition-colors ${
                                 isCrossFiltered && detail?.calls > 0
-                                  ? "bg-[#fda4af] dark:bg-rose-800/60"
+                                  ? "bg-[#fecdd3] dark:bg-[#492738]"
                                   : colors.bg
                               }`}
                             >
@@ -2229,7 +2256,7 @@ export default function App() {
                                   <div
                                     className={`font-extrabold text-[14px] leading-none ${
                                       isCrossFiltered
-                                        ? "text-[#881337] dark:text-rose-100"
+                                        ? "text-[#4c0519] dark:text-[#fff1f2]"
                                         : colors.textMain
                                     }`}
                                   >
@@ -2238,7 +2265,7 @@ export default function App() {
                                   <div
                                     className={`font-medium text-[11px] mt-1.5 ${
                                       isCrossFiltered
-                                        ? "text-[#be123c] dark:text-rose-300"
+                                        ? "text-[#701a35] dark:text-[#ffe4e6]"
                                         : colors.textSub
                                     }`}
                                   >
@@ -2563,6 +2590,15 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end gap-1">
+              <button onClick={handleExportCSV} disabled={isExporting || isProcessing || dashboardFilteredRecords.length === 0}
+                className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="ดาวน์โหลดข้อมูลตามตัวกรองปัจจุบันเป็น CSV">
+                {isExporting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <FileSpreadsheet className="w-5 h-5" />}
+                {isExporting ? "กำลังสร้าง CSV..." : "Export CSV"}
+              </button>
+              <span role="status" aria-live="polite" className="text-xs text-emerald-200">{exportStatus || "ข้อมูลตามตัวกรองที่เลือก"}</span>
+            </div>
             <nav className="flex bg-slate-800/80 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-700/60 dark:border-slate-700 shadow-lg overflow-x-auto">
               <button
                 onClick={() => setActiveTab("overview")}
@@ -2885,7 +2921,7 @@ export default function App() {
                                     key={mIdx}
                                     className={`px-2 py-4 text-center font-extrabold text-sm transition-colors print:border-l ${
                                       isCrossFiltered && val > 0
-                                        ? "bg-[#fda4af] dark:bg-rose-800/60 text-[#881337] dark:text-rose-100"
+                                        ? "bg-[#fecdd3] dark:bg-[#492738] text-[#4c0519] dark:text-[#fff1f2]"
                                         : colors.bg
                                     } ${
                                       !isCrossFiltered && val > 0
