@@ -2577,7 +2577,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-wide text-white">
-                ระบบรายงาน Call MAINTENANCE DASHBOARD
+                ระบบรายงาน Call MAINTENANCE DASHBOARD By APHISIT.TAMAPUN
               </h1>
               <div className="mt-2">{renderSourceSelector()}</div>
               <div className="flex items-center gap-2 mt-1">
