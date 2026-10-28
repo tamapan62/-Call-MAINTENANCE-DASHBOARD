@@ -2577,7 +2577,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-wide text-white">
-                ระบบรายงาน Call MAINTENANCE DASHBOARD By APHISIT.TAMAPUN
+                ระบบรายงาน Call MAINTENANCE DASHBOARD
               </h1>
               <div className="mt-2">{renderSourceSelector()}</div>
               <div className="flex items-center gap-2 mt-1">
@@ -2632,6 +2632,7 @@ export default function App() {
         </div>
       </header>
 
+
       <style>{`
         .dashboard-fit table { table-layout: fixed; width: 100%; white-space: normal; }
         .dashboard-fit table th, .dashboard-fit table td {
@@ -2647,22 +2648,12 @@ export default function App() {
         .dashboard-fit table td svg { max-width: 100%; height: auto; }
         .dashboard-fit svg { min-width: 0 !important; }
         .dashboard-fit table .truncate { white-space: normal; }
-      `}</style>
-      <style>{`
-        .dashboard-fit table { table-layout: fixed; width: 100%; white-space: normal; }
-        .dashboard-fit table th, .dashboard-fit table td {
-          min-width: 0 !important; max-width: none !important;
-          padding: 10px 3px !important; overflow-wrap: anywhere;
-          font-size: clamp(11px, .95vw, 14px);
+        .dashboard-fit table td > div:not(:has(svg)), .dashboard-fit table th > div {
+          transform: scale(1.18);
+          transform-origin: center;
         }
-        .dashboard-fit table th:first-child, .dashboard-fit table td:first-child { width: 15%; padding-left: 8px !important; }
-        .dashboard-fit table th:nth-child(2), .dashboard-fit table td:nth-child(2) { width: 8%; }
-        .dashboard-fit table th:last-child, .dashboard-fit table td:last-child { width: 9%; }
-        .dashboard-fit table td div, .dashboard-fit table th div { font-size: inherit !important; min-width: 0 !important; }
-        .dashboard-fit table td .text-xl { font-size: clamp(13px, 1.15vw, 18px) !important; }
-        .dashboard-fit table td svg { max-width: 100%; height: auto; }
-        .dashboard-fit svg { min-width: 0 !important; }
-        .dashboard-fit table .truncate { white-space: normal; }
+        .dashboard-fit table td:first-child > div { transform-origin: left center; }
+
       `}</style>
       <main className="dashboard-fit w-full max-w-[1800px] mx-auto px-3 md:px-5 mt-6">
         {activeTab === "overview" && (
