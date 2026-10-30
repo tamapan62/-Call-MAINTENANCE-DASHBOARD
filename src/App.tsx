@@ -1185,6 +1185,7 @@ export default function App() {
     storeCode: new Set(),
   });
 
+  const [sortMonthsByTable, setSortMonthsByTable] = useState<Record<string, string[]>>({});
   const [rowLimits, setRowLimits] = useState<any>({
     sec1: 15,
     sec2: 15,
@@ -1265,6 +1266,7 @@ export default function App() {
     setOpenSections((prev: any) => ({ ...prev, [sec]: !prev[sec] }));
 
   const resetFilters = () => {
+    setSortMonthsByTable({});
     setFilterProduct([]);
     setFilterProblem([]);
     setFilterCause([]);
@@ -2099,9 +2101,42 @@ export default function App() {
     ));
   };
 
+  const sortTableRows = (rows: any[], tableId: string) => {
+    const selected = (sortMonthsByTable[tableId] || []).filter(month => visibleMonths.includes(month));
+    if (!selected.length) return rows;
+    const indices = selected.map(month => visibleMonths.indexOf(month));
+    const score = (row: any) => indices.reduce((sum, index) => sum + (Number(row?.monthly?.[index]) || 0), 0);
+    return rows.map((row, index) => ({row, index, score: score(row)}))
+      .sort((a, b) => b.score - a.score || a.index - b.index).map(item => item.row);
+  };
+  const toggleSortMonth = (tableId: string, month: string) => {
+    setSortMonthsByTable(previous => {
+      const selected = (previous[tableId] || []).filter(value => visibleMonths.includes(value));
+      return {...previous, [tableId]: selected.includes(month) ? selected.filter(value => value !== month) : [...selected, month]};
+    });
+    setRowLimits((previous: any) => ({...previous, [tableId]: tableId === "sec6" ? 30 : 15}));
+  };
+  const renderSortMonth = (tableId: string, month: string) => {
+    const selected = (sortMonthsByTable[tableId] || []).includes(month);
+    const date = formatMonthThaiSplit(month);
+    return <button type="button" aria-label={"เรียง " + tableId + " " + month} aria-pressed={selected}
+      onClick={() => toggleSortMonth(tableId, month)}
+      title="เลือกหลายเดือนได้: เรียงจากยอดรวมของเดือนที่เลือกมากไปน้อย"
+      className={`w-full flex flex-col items-center gap-1 rounded-md py-1 focus-visible:ring-2 focus-visible:ring-indigo-500 ${selected ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200" : "hover:bg-indigo-50 dark:hover:bg-slate-700"}`}>
+      <span>{date.m}</span><span className="text-xs text-slate-500 dark:text-slate-400">{date.y}</span>
+      <span aria-hidden="true">{selected ? "✓ ↓" : "↕"}</span>
+    </button>;
+  };
+  const renderSortReset = (tableId: string) => (sortMonthsByTable[tableId] || []).some(month => visibleMonths.includes(month)) && (
+    <div className="flex items-center justify-between gap-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-950 text-xs text-indigo-700 dark:text-indigo-200">
+      <span>เรียงยอดรวมเดือนที่เลือก: {(sortMonthsByTable[tableId] || []).filter(month => visibleMonths.includes(month)).join(", ")} ↓</span>
+      <button type="button" onClick={() => setSortMonthsByTable(previous => ({...previous, [tableId]: []}))} className="font-bold whitespace-nowrap">ล้างการเรียง</button>
+    </div>
+  );
+
   const renderStandardTable = (tableDef: any) => {
     const limit = rowLimits[tableDef.id] || 15;
-    const visibleRows = (tableDef.data || []).slice(0, limit);
+    const visibleRows = sortTableRows(tableDef.data || [], tableDef.id).slice(0, limit);
     const hasMore = (tableDef.data || []).length > limit;
     const grandTotal = (tableDef.data || []).reduce((acc: any, row: any) => acc + (row?.total || 0), 0);
     const grandMonthly = Array(visibleMonths.length).fill(0);
@@ -2120,6 +2155,7 @@ export default function App() {
     return (
       <div
         key={tableDef.id}
+        data-testid={"table-" + tableDef.id}
         className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/85 dark:border-slate-700 shadow-sm overflow-hidden text-left transition-colors"
       >
         <button
@@ -2144,6 +2180,7 @@ export default function App() {
           </div>
         </button>
 
+        {renderSortReset(tableDef.id)}
         {openSections[tableDef.id] && (
           <div className="overflow-x-auto max-h-[600px] custom-scrollbar relative">
             <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -2157,18 +2194,9 @@ export default function App() {
                       <span className="whitespace-nowrap">รวม CALLS</span>
                     </div>
                   </th>
-                  {visibleMonths.map((m: any) => {
-                    const thDate = formatMonthThaiSplit(m);
-                    return (
-                      <th
-                        key={m}
-                        className="px-2 py-5 min-w-[70px] text-center leading-tight"
-                      >
-                        <div className="text-base">{thDate.m}</div>
-                        <div className="text-xs mt-1 text-slate-500 dark:text-slate-400">{thDate.y}</div>
-                      </th>
-                    );
-                  })}
+                  {visibleMonths.map((m: any) => (
+                    <th key={m} className="px-2 py-5 min-w-[70px] text-center leading-tight">{renderSortMonth(tableDef.id, m)}</th>
+                  ))}
                   <th className="px-3 py-5 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight whitespace-pre-line">
                     {getTrendHeader()}
                   </th>
@@ -2556,7 +2584,7 @@ export default function App() {
   // ==========================================
 
   const storeLimit = rowLimits["sec6"] || 15;
-  const visibleBranches = branchTableData.slice(0, storeLimit);
+  const visibleBranches = sortTableRows(branchTableData, "sec6").slice(0, storeLimit);
   const hasMoreBranches = branchTableData.length > storeLimit;
   const grandBranchTotal = branchTableData.reduce(
     (acc: any, row: any) => acc + (row?.total || 0),
@@ -2797,6 +2825,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {renderSortReset("sec6")}
                 <div className="overflow-x-auto max-h-[700px] custom-scrollbar relative print:max-h-none print:overflow-visible">
                   <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 shadow-sm print:static">
@@ -2819,7 +2848,7 @@ export default function App() {
                         </th>
                         {visibleMonths.map((m: any) => (
                           <th key={m} className="px-2 py-4 text-center min-w-[60px]">
-                            {formatMonthThaiSplit(m).m}
+                            {renderSortMonth("sec6", m)}
                           </th>
                         ))}
                       </tr>
