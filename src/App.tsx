@@ -323,295 +323,135 @@ const getRowMaxVal = (monthlyArray: any) => Math.max(...(monthlyArray || []), 1)
 // 2. CHART & UI COMPONENTS
 // ==========================================
 
-const TrendLineChart = ({ data, months }: any) => {
-  if (!data || data.length === 0 || !months || months.length === 0) return null;
-
-  let maxVal = 1;
-  data.forEach((p: any) =>
-    (p?.monthly || []).forEach((v: any) => {
-      if (v > maxVal) maxVal = v;
-    })
-  );
-  maxVal = Math.max(Math.ceil(maxVal * 1.15), 5);
-
-  const width = 1200,
-    height = 500,
-    padding = { top: 60, right: 60, bottom: 80, left: 70 };
-  const innerWidth = width - padding.left - padding.right;
-  const innerHeight = height - padding.top - padding.bottom;
-  const xStep =
-    months.length > 1 ? innerWidth / (months.length - 1) : innerWidth;
-  const getY = (val: any) =>
-    padding.top + innerHeight - (val / maxVal) * innerHeight;
-  const getX = (idx: any) => padding.left + idx * xStep;
-
-  const colors = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"];
-
+const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
+  const [focusedProduct, setFocusedProduct] = useState<string | null>(null);
+  const currentYear = new Date().getFullYear();
+  const monthKeys = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const thaiMonths = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const colors = ["#6366f1", "#0284c7", "#059669", "#d97706", "#db2777"];
+  const series = useMemo(() => {
+    const slots = (months || []).map((label: string, index: number) => {
+      const parts = String(label).split("-");
+      const month = monthKeys.findIndex((key, i) => key.toLowerCase() === parts[0]?.trim().toLowerCase() || thaiMonths[i] === parts[0]?.trim());
+      let year = Number(parts[1]?.trim());
+      if (year < 100) year += 2000;
+      if (year > 2400) year -= 543;
+      return {month, year, index};
+    }).filter((slot: any) => slot.month >= 0 && Number.isFinite(slot.year));
+    const years = Array.from(new Set(slots.map((slot: any) => slot.year))).sort((a: any, b: any) => a - b);
+    return (data || []).flatMap((product: any, productIndex: number) => years.map((year: any) => {
+      const values: (number | null)[] = Array(12).fill(null);
+      slots.filter((slot: any) => slot.year === year).forEach((slot: any) => { values[slot.month] = Number(product.monthly?.[slot.index]) || 0; });
+      return {name: product.name, year, values, color: colors[productIndex % colors.length], productIndex};
+    }));
+  }, [data, months]);
+  const focusedExists = (data || []).some((product: any) => product.name === focusedProduct);
+  const showCombined = combineDefault && !focusedExists;
+  const shown = showCombined
+    ? Array.from(new Set(series.map((item: any) => item.year))).map(year => ({
+        name: "Call รวมทุกอุปกรณ์", year, color: colors[0], productIndex: 0,
+        values: Array.from({length: 12}, (_, month) => {
+          const values = series.filter((item: any) => item.year === year).map((item: any) => item.values[month]).filter((value: any) => value !== null);
+          return values.length ? values.reduce((sum: number, value: number) => sum + value, 0) : null;
+        }),
+      }))
+    : series.filter((item: any) => !focusedExists || item.name === focusedProduct);
+  const singleProduct = new Set(shown.map((item: any) => item.name)).size === 1;
+  const current = shown.filter((item: any) => item.year === currentYear);
+  const lines = shown.filter((item: any) => item.year !== currentYear).map((item: any) => ({...item, color: singleProduct ? "#f97316" : item.color}));
+  const years: number[] = Array.from(new Set(series.map((item: any) => item.year))).sort((a: any, b: any) => a - b) as number[];
+  const max = Math.max(1, ...shown.flatMap((item: any) => item.values.filter((v: any) => v !== null)));
+  const ceiling = Math.ceil(max * 1.2);
+  const width = 1200, height = 470;
+  const padding = {left: 75, right: 30, top: 48, bottom: 54};
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const step = plotWidth / 12;
+  const x = (month: number) => padding.left + step * (month + 0.5);
+  const y = (value: number) => padding.top + plotHeight * (1 - value / ceiling);
+  const barWidth = Math.min(42, step * 0.65 / Math.max(1, current.length));
+  const showNumbers = !shown.length || new Set(shown.map((item: any) => item.name)).size <= 1;
+  const tip = (item: any, month: number, value: number) => {
+    const previous = month > 0 ? item.values[month - 1] : null;
+    const trend = previous !== null && previous > 0 ? ((value - previous) / previous * 100).toFixed(1) + "% เทียบเดือนก่อน" : "";
+    return `${item.name} · ${thaiMonths[month]} ${item.year}: ${value.toLocaleString()} Call ${trend}`;
+  };
+  if (!series.length) return null;
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm p-6 mb-6 transition-colors">
-      <div className="mb-4 flex justify-between items-start">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            แนวโน้มปัญหาแบ่งตามกลุ่มอุปกรณ์ (Product Type Trend)
-          </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            ตัวเลขบนกราฟแสดงจำนวน Call
-            และเปอร์เซ็นต์แนวโน้มเทียบกับเดือนที่ผ่านมา (
-            <span className="text-emerald-500 font-bold">สีเขียว=ลดลง</span>,{" "}
-            <span className="text-rose-500 font-bold">สีแดง=เพิ่มขึ้น</span>)
-          </p>
-        </div>
-        <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-lg text-indigo-500 dark:text-indigo-400">
-          <TrendingUp className="w-6 h-6" />
-        </div>
+    <section data-testid="year-comparison-chart" className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
+      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{showCombined ? "แนวโน้ม Call รวมทุกอุปกรณ์ เทียบรายปี" : "แนวโน้มปัญหาแบ่งตามกลุ่มอุปกรณ์ เทียบรายปี (Product Type Trend)"}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">ปี {currentYear} แสดงเป็นแท่ง · ปีก่อนหน้าแสดงเป็นเส้นแยกปี · เดือนที่ไม่มีข้อมูลเว้นว่าง · กดชื่ออุปกรณ์เพื่อดูตัวเลขชัดขึ้น</p>
+      <div className="flex flex-wrap gap-4 justify-center my-4 text-sm text-slate-700 dark:text-slate-200">
+        {years.map((year, index) => <span key={year} className="flex items-center gap-2">
+          {year === currentYear ? <span className="inline-block w-3 h-4 bg-indigo-500 rounded-sm" /> : <svg width="28" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke={singleProduct ? "#f97316" : "currentColor"} strokeWidth="2" strokeDasharray={index % 2 ? "5 3" : undefined} /></svg>}
+          {year} ({year === currentYear ? "แท่ง" : "เส้น"})
+        </span>)}
       </div>
-
-      <div className="w-full overflow-x-auto custom-scrollbar">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto min-w-[1000px]"
-        >
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const y = padding.top + innerHeight - ratio * innerHeight;
-            return (
-              <line
-                key={`l-${ratio}`}
-                x1={padding.left}
-                y1={y}
-                x2={width - padding.right}
-                y2={y}
-                stroke="currentColor"
-                className="text-slate-100 dark:text-slate-700"
-                strokeDasharray="4,4"
-              />
-            );
-          })}
-          {[0, 0.5, 1].map((ratio) => {
-            const y = padding.top + innerHeight - ratio * innerHeight;
-            const val = Math.round(ratio * maxVal);
-            return (
-              <text
-                key={`t-${ratio}`}
-                x={padding.left - 20}
-                y={y + 5}
-                textAnchor="end"
-                fontSize="14"
-                fill="currentColor"
-                className="text-slate-500 dark:text-slate-400"
-                fontWeight="bold"
-              >
-                {val.toLocaleString()}
-              </text>
-            );
-          })}
-          {data.map((prod: any, pIdx: any) => {
-            if (!prod) return null;
-            const color = colors[pIdx % colors.length];
-            const points = (prod?.monthly || []).map((val: any, mIdx: any) => ({
-              x: getX(mIdx),
-              y: getY(val),
-            }));
-            const pathData = generateSmoothPath(points);
-            return (
-              <path
-                key={`p-${prod?.name || pIdx}`}
-                d={pathData}
-                fill="none"
-                stroke={color}
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            );
-          })}
-          {months.map((_: any, mIdx: any) => {
-            const cx = getX(mIdx);
-            const monthLabels = data.map((prod: any, pIdx: any) => {
-              if (!prod) return null;
-              const val = prod?.monthly?.[mIdx] || 0;
-              const prev = mIdx > 0 ? prod?.monthly?.[mIdx - 1] : null;
-              let pctText = "",
-                pctColor = "currentColor";
-              let pctClass = "text-slate-500 dark:text-slate-400";
-
-              if (mIdx > 0 && prev !== null) {
-                if (prev > 0) {
-                  const pct = ((val - prev) / prev) * 100;
-                  pctText = `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
-                  pctClass = pct > 0 ? "text-rose-500 dark:text-rose-400" : pct < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400";
-                } else if (val > 0) {
-                  pctText = "+100.0%";
-                  pctClass = "text-rose-500 dark:text-rose-400";
-                }
-              }
-              return {
-                pIdx,
-                name: prod?.name,
-                val,
-                y: getY(val),
-                color: colors[pIdx % colors.length],
-                pctText,
-                pctColor,
-                pctClass,
-                labelY: getY(val),
-                placement: "above",
-              };
-            }).filter(Boolean);
-
-            monthLabels.sort((a: any, b: any) => a.y - b.y);
-            monthLabels.forEach((lbl: any, idx: any) => {
-              if (idx % 2 === 0) {
-                lbl.labelY = lbl.y - 20;
-                lbl.placement = "above";
-              } else {
-                lbl.labelY = lbl.y + 28;
-                lbl.placement = "below";
-              }
-            });
-            monthLabels.sort((a: any, b: any) => a.labelY - b.labelY);
-
-            // ใช้ .forEach แทน for loop
-            Array.from({ length: 10 }).forEach(() => {
-              monthLabels.slice(1).forEach((curr: any, idx: number) => {
-                const prev = monthLabels[idx];
-                if (curr.labelY - prev.labelY < 36) {
-                  const overlap = 36 - (curr.labelY - prev.labelY);
-                  prev.labelY -= overlap / 2;
-                  curr.labelY += overlap / 2;
-                }
-              });
-            });
-
-            return (
-              <g key={`m-${mIdx}`}>
-                {monthLabels.map((lbl: any) => {
-                  const textWidth = Math.max(
-                    64,
-                    String(lbl.val).length * 8 + 12
-                  );
-                  const hasSignificantOffset =
-                    Math.abs(
-                      lbl.labelY -
-                        (lbl.placement === "above" ? lbl.y - 20 : lbl.y + 28)
-                    ) > 5;
-                  return (
-                    <g key={`lbl-${lbl.pIdx}`}>
-                      {hasSignificantOffset && (
-                        <line
-                          x1={cx}
-                          y1={lbl.y}
-                          x2={cx}
-                          y2={lbl.labelY + (lbl.labelY < lbl.y ? 14 : -14)}
-                          stroke={lbl.color}
-                          strokeWidth="1.5"
-                          strokeDasharray="2,2"
-                          opacity="0.8"
-                        />
-                      )}
-                      <circle
-                        cx={cx}
-                        cy={lbl.y}
-                        r="6"
-                        fill="currentColor"
-                        className="text-white dark:text-slate-800"
-                        stroke={lbl.color}
-                        strokeWidth="3"
-                      />
-                      <g transform={`translate(${cx}, ${lbl.labelY})`}>
-                        <rect
-                          x={-textWidth / 2}
-                          y="-15"
-                          width={textWidth}
-                          height={30}
-                          rx="8"
-                          fill="currentColor"
-                          className="text-white dark:text-slate-700 shadow-sm"
-                          fillOpacity="0.95"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          style={{ stroke: 'var(--tw-border-opacity, 1) rgba(226, 232, 240, 1)' }} // Fallback light mode border
-                        />
-                        <text
-                          x="0"
-                          y="0"
-                          textAnchor="middle"
-                          fontSize="13"
-                          fontWeight="bold"
-                          fill="currentColor"
-                          className="text-slate-800 dark:text-slate-100"
-                        >
-                          {lbl.val.toLocaleString()}
-                        </text>
-                        {lbl.pctText ? (
-                          <text
-                            x="0"
-                            y="11"
-                            textAnchor="middle"
-                            fontSize="11"
-                            fontWeight="extrabold"
-                            fill="currentColor"
-                            className={lbl.pctClass}
-                          >
-                            {lbl.pctText}
-                          </text>
-                        ) : (
-                          <text
-                            x="0"
-                            y="11"
-                            textAnchor="middle"
-                            fontSize="10"
-                            fontWeight="bold"
-                            fill="currentColor"
-                            className="text-slate-400 dark:text-slate-500"
-                          >
-                            -
-                          </text>
-                        )}
-                      </g>
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })}
-          {months.map((m: any, idx: any) => {
-            const thMonth = formatMonthThaiSplit(m);
-            return (
-              <text
-                key={`tm-${idx}`}
-                x={getX(idx)}
-                y={height - 25}
-                textAnchor="middle"
-                fontSize="15"
-                fontWeight="bold"
-                fill="currentColor"
-                className="text-slate-800 dark:text-slate-200"
-              >{`${thMonth.m} ${thMonth.y}`}</text>
-            );
-          })}
-        </svg>
-      </div>
-      <div className="flex flex-wrap justify-center gap-8 mt-6 pt-5 border-t border-slate-100 dark:border-slate-700">
-        {data.map((prod: any, idx: any) => {
-          if(!prod) return null;
-          return (
-            <div
-              key={`leg-${idx}`}
-              className="flex items-center gap-3 text-sm font-extrabold text-slate-600 dark:text-slate-300"
-            >
-              <span
-                className="w-4 h-4 rounded-full shadow-sm"
-                style={{ backgroundColor: colors[idx % colors.length] }}
-              ></span>
-              <span style={{ color: colors[idx % colors.length] }}>
-                {(prod?.name || "").toUpperCase()}
-              </span>
-            </div>
-          )
+      <svg role="img" aria-label="กราฟเปรียบเทียบ Call รายเดือนแยกปี" viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+        {[0, .25, .5, .75, 1].map(ratio => {
+          const value = Math.round(ceiling * ratio), py = y(value);
+          return <g key={ratio}><line x1={padding.left} x2={width-padding.right} y1={py} y2={py} stroke="currentColor" strokeDasharray="4 4" className="text-slate-100 dark:text-slate-700" />
+            <text x={padding.left - 12} y={py + 4} textAnchor="end" fontSize="13" fill="currentColor" className="text-slate-500 dark:text-slate-400">{value.toLocaleString()}</text></g>;
         })}
+        {current.map((item: any, index: number) => <g key={item.name + item.year} data-year={item.year} data-chart-type="bar">
+          {item.values.map((value: number | null, month: number) => value === null ? null : <g key={month}>
+            <rect x={x(month) - current.length * barWidth / 2 + index * barWidth} y={y(value)} width={Math.max(2, barWidth - 2)} height={padding.top+plotHeight-y(value)} rx="3" fill={item.color} fillOpacity="0.8"><title>{tip(item, month, value)}</title></rect>
+            {showNumbers && <text x={x(month)} y={y(value)-10} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
+          </g>)}
+        </g>)}
+        {lines.map((item: any) => {
+          const path = item.values.map((value: number | null, month: number) => value === null ? "" : `${month > 0 && item.values[month-1] !== null ? "L" : "M"}${x(month)},${y(value)}`).join(" ");
+          return <g key={item.name+item.year} data-year={item.year} data-chart-type="line">
+            <path d={path} fill="none" stroke={item.color} strokeWidth="3" strokeDasharray={years.indexOf(item.year) % 2 ? "6 4" : undefined} />
+            {item.values.map((value: number | null, month: number) => value === null ? null : <g key={month}>
+              <circle cx={x(month)} cy={y(value)} r="4" fill={item.color}><title>{tip(item,month,value)}</title></circle>
+              {showNumbers && <text x={x(month)} y={y(value)-16} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
+            </g>)}
+          </g>;
+        })}
+        {thaiMonths.map((month,index)=><text key={month} x={x(index)} y={height-17} textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" className="text-slate-700 dark:text-slate-300">{month}</text>)}
+      </svg>
+      <div className="flex flex-wrap justify-center gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+        {(data || []).map((product: any, index: number) => <button type="button" key={product.name} onClick={()=>setFocusedProduct(focusedProduct===product.name ? null : product.name)} aria-pressed={focusedProduct===product.name}
+          className="px-3 py-2 rounded-lg border text-sm font-bold" style={{color:colors[index % colors.length],borderColor:focusedProduct===product.name ? colors[index % colors.length] : "transparent"}}>{product.name}</button>)}
       </div>
-    </div>
+    </section>
   );
+};
+
+const YearMonthSummary = ({ months, totals, total, label = "สรุปรายปี", labelColumns = 2, tailColumns = 0 }: any) => {
+  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const thai = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const slots = (months || []).map((month: string, index: number) => {
+    const parts = String(month).split("-");
+    const m = names.findIndex((name,i)=>name.toLowerCase()===parts[0]?.trim().toLowerCase() || thai[i]===parts[0]?.trim());
+    let year = Number(parts[1]?.trim());
+    if (year < 100) year += 2000;
+    if (year > 2400) year -= 543;
+    return {m, year, value: Number(totals?.[index]) || 0};
+  });
+  const years = Array.from(new Set(slots.filter((s: any)=>s.m>=0 && Number.isFinite(s.year)).map((s: any)=>s.year))).sort((a: any,b: any)=>a-b) as number[];
+  if (!years.length) return null;
+  const latest = years[years.length-1];
+  const valueAt = (year: number, month: number) => slots.find((s: any)=>s.year===year && s.m===month)?.value;
+  const percent = (value: number, base: number | undefined) => base === undefined || base===0 ? null : (value-base)/base*100;
+  const yoy = thai.map((_,m)=>{const value=valueAt(latest,m);return value===undefined ? null : percent(value,valueAt(latest-1,m));});
+  const mom = thai.map((_,m)=>{const value=valueAt(latest,m);return m===0||value===undefined ? null : percent(value,valueAt(latest,m-1));});
+  const styleFor = (value: number | null) => value===null ? {} : {backgroundColor:value>0 ? (value>=20 ? "#fda4af" : "#fef3c7") : value<0 ? "#a7f3d0" : "#f1f5f9",color:value>0 ? "#881337" : value<0 ? "#064e3b" : "#334155"};
+  const cell = {width:"auto",fontSize:"inherit",textAlign:"center" as const,border:"1px solid #cbd5e1",backgroundColor:"#f8fafc",color:"#0f172a",whiteSpace:"nowrap" as const};
+  const labelStyle = {...cell,backgroundColor:"#eff6ff",color:"#1e3a8a",fontWeight:800};
+  const tail = tailColumns>0 ? <td colSpan={tailColumns} aria-hidden="true" style={cell} /> : null;
+  const changeRow = (title: string, changes: (number | null)[]) => <tr>
+    <td colSpan={labelColumns} style={labelStyle}>{title}</td>
+    {changes.map((value,i)=><td key={i} style={{...cell,...styleFor(value),fontWeight:700}} title={value===null ? "ไม่มีฐานข้อมูลสำหรับเปรียบเทียบ" : value.toFixed(2)+"%"}><span>{value===null ? "—" : (value>0 ? "+" : "")+value.toFixed(1)+"%"}</span></td>)}{tail}
+  </tr>;
+  return <tfoot data-testid="year-month-summary" className="year-month-footer sticky bottom-0 z-30 bg-white print:static" aria-label={label}>
+    <tr><td colSpan={labelColumns+12+tailColumns} style={{...cell,backgroundColor:"#123e73",color:"white",fontWeight:800,textAlign:"center"}}>ผลรวมทั้งหมด และเปรียบเทียบปี และเดือน</td></tr>
+    {years.map(year=><tr key={year}><td colSpan={labelColumns} style={labelStyle}>{year}</td>{thai.map((_,m)=><td key={m} style={cell}><span>{valueAt(year,m)?.toLocaleString() || (valueAt(year,m)===0 ? "0" : "")}</span></td>)}{tail}</tr>)}
+    {changeRow(`% เทียบปี ${latest} / ${latest-1}`,yoy)}
+    {changeRow(`% เทียบเดือนปี ${latest}`,mom)}
+    <tr><td colSpan={labelColumns+12+tailColumns} style={{...labelStyle,textAlign:"left"}}>Grand Total (รวมทั้งหมด): {Number(total||0).toLocaleString()} Calls</td></tr>
+  </tfoot>;
 };
 
 const ParetoChart = ({ data, title, subtitle, icon: Icon }: any) => {
@@ -2018,11 +1858,6 @@ export default function App() {
       }));
   }, [chartAggregatedData.systems, isDataLoaded]);
 
-  const top5ProductsForTrend = useMemo(
-    () => chartAggregatedData.products.slice(0, 5),
-    [chartAggregatedData.products]
-  );
-
   const branchTableData = useMemo(() => {
     if (!isDataLoaded || !aggregatedStats["storeCode"]) return [];
     const storeStats = aggregatedStats["storeCode"];
@@ -2101,6 +1936,11 @@ export default function App() {
     ));
   };
 
+  const getSummaryRows = (rows: any[], field: string, key = "name") => {
+    const selected = crossFilters[field];
+    return selected && selected.size > 0 ? rows.filter(row => selected.has(row?.[key])) : rows;
+  };
+
   const sortTableRows = (rows: any[], tableId: string) => {
     const selected = (sortMonthsByTable[tableId] || []).filter(month => visibleMonths.includes(month));
     if (!selected.length) return rows;
@@ -2135,317 +1975,97 @@ export default function App() {
   );
 
   const renderStandardTable = (tableDef: any) => {
-    const limit = rowLimits[tableDef.id] || 15;
-    const visibleRows = sortTableRows(tableDef.data || [], tableDef.id).slice(0, limit);
-    const hasMore = (tableDef.data || []).length > limit;
-    const grandTotal = (tableDef.data || []).reduce((acc: any, row: any) => acc + (row?.total || 0), 0);
-    const grandMonthly = Array(visibleMonths.length).fill(0);
-    let grandForecast = 0;
-
-    (tableDef.data || []).forEach((row: any) => {
-      if(!row) return; // 🔥 ป้องกัน Row เป็น undefined
-      (row?.monthly || []).forEach((val: any, i: any) => (grandMonthly[i] += val));
-      grandForecast += row?.forecast || 0;
+    const branch = tableDef.keyField === "storeCode";
+    const limit = rowLimits[tableDef.id] || (branch ? 30 : 15);
+    const source = tableDef.data || [];
+    const summaryRows = getSummaryRows(source, tableDef.keyField, branch ? "id" : "name");
+    const visibleRows = sortTableRows(summaryRows, tableDef.id).slice(0, limit);
+    const hasRowSelection = crossFilters[tableDef.keyField]?.size > 0;
+    const grandTotal = summaryRows.reduce((sum: number,row: any)=>sum+(row.total||0),0);
+    const grandMonthly = visibleMonths.map((_: any,index: number)=>summaryRows.reduce((sum: number,row: any)=>sum+(row.monthly?.[index]||0),0));
+    const en = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const th = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+    const slots = visibleMonths.map((label: string,index: number)=>{
+      const parts=label.split("-"); let year=Number(parts[1]?.trim()); if(year<100)year+=2000;if(year>2400)year-=543;
+      return {label,index,year,month:en.findIndex((m,i)=>m.toLowerCase()===parts[0]?.trim().toLowerCase()||th[i]===parts[0]?.trim())};
     });
-
-    const grandTrend = calculateTrend(grandMonthly);
-
-    
-
-    return (
-      <div
-        key={tableDef.id}
-        data-testid={"table-" + tableDef.id}
-        className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/85 dark:border-slate-700 shadow-sm overflow-hidden text-left transition-colors"
-      >
-        <button
-          onClick={() => toggleSection(tableDef.id)}
-          className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700 hover:bg-slate-100/60 dark:hover:bg-slate-700/50 flex justify-between items-center transition-all"
-        >
-          <span className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-            <span className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-sm font-black flex items-center justify-center rounded-lg shadow-sm">
-              {tableDef.num}
-            </span>
-            {tableDef.title}
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="text-sm bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-extrabold px-4 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800">
-              {(tableDef.data || []).length} รายการ
-            </span>
-            {openSections[tableDef.id] ? (
-              <ChevronUp className="w-5 h-5 text-slate-400 dark:text-slate-500" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-slate-400 dark:text-slate-500" />
-            )}
-          </div>
-        </button>
-
-        {renderSortReset(tableDef.id)}
-        {openSections[tableDef.id] && (
-          <div className="overflow-x-auto max-h-[600px] custom-scrollbar relative">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead className="sticky top-0 z-20 bg-[#f8fafc] dark:bg-slate-800 shadow-sm">
-                <tr className="text-sm font-extrabold text-[#1e3a8a] dark:text-indigo-300 border-b border-slate-200 dark:border-slate-700 align-bottom">
-                  <th className="px-6 py-5 sticky left-0 z-30 bg-[#f8fafc] dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 w-1/4 min-w-[250px] text-left">
-                    รายการวิเคราะห์
-                  </th>
-                  <th className="px-4 py-5 border-r border-slate-200 dark:border-slate-700 min-w-[120px]">
-                    <div className="flex items-center justify-center gap-1.5 h-full">
-                      <span className="whitespace-nowrap">รวม CALLS</span>
-                    </div>
-                  </th>
-                  {visibleMonths.map((m: any) => (
-                    <th key={m} className="px-2 py-5 min-w-[70px] text-center leading-tight">{renderSortMonth(tableDef.id, m)}</th>
-                  ))}
-                  <th className="px-3 py-5 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight whitespace-pre-line">
-                    {getTrendHeader()}
-                  </th>
-{showForecast && <>
-                  <th className="px-3 py-4 bg-indigo-50/40 dark:bg-indigo-900/20 border-l border-slate-200 dark:border-slate-700 min-w-[100px] text-center leading-tight text-[#1e3a8a] dark:text-indigo-300 font-extrabold">
-                    <div className="text-[13px]">ประมาณการเดือนล่าสุด</div>
-                    <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      {visibleMonths.length > 0
-                        ? `(หาร ${latestMonthMaxDay} วัน * 30)`
-                        : ""}
-                    </div>
-                  </th>
-                  <th className="px-4 py-4 border-l border-slate-200 dark:border-slate-700 min-w-[150px] text-center">
-                    กราฟประมาณการเดือนล่าสุด
-                  </th>
-</>}
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {visibleRows.length > 0 ? (
-                  visibleRows.map((row: any, idx: any) => {
-                    if (!row) return null; // 🔥 ป้องกันตัวแปร row เป็น undefined
-                    const maxVal = getRowMaxVal(row?.monthly || []);
-                    const isCrossFiltered = crossFilters[
-                      tableDef.keyField
-                    ]?.has(row?.name);
-                    return (
-                      <tr
-                        key={idx}
-                        className={`border-b border-slate-100 dark:border-slate-700/50 hover:bg-indigo-50/50 dark:hover:bg-slate-700/50 transition-all cursor-pointer group ${
-                          isCrossFiltered ? "bg-indigo-50/40 dark:bg-indigo-900/30 font-bold" : ""
-                        }`}
-                        onClick={() => {
-                          setCrossFilters((prev: any) => {
-                            const next = { ...prev };
-                            const newSet = new Set(
-                              next[tableDef.keyField] || []
-                            );
-                            if (newSet.has(row?.name)) newSet.delete(row?.name);
-                            else if(row?.name) newSet.add(row?.name);
-                            next[tableDef.keyField] = newSet;
-                            return next;
-                          });
-                        }}
-                      >
-                        <td
-                          className={`px-6 py-4 font-bold sticky left-0 z-10 border-r border-slate-100 dark:border-slate-700/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] truncate max-w-[300px] transition-colors ${
-                            isCrossFiltered
-                              ? "bg-indigo-50 dark:bg-slate-800 border-l-4 border-l-indigo-600 dark:border-l-indigo-500 text-indigo-700 dark:text-indigo-400"
-                              : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-                          }`}
-                          title={row?.name}
-                        >
-                          <div className="flex items-center gap-3 text-[14px]">
-                            {isCrossFiltered && (
-                              <span className="w-2.5 h-2.5 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-pulse flex-shrink-0"></span>
-                            )}
-                            <span className="truncate">{row?.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-5 text-center bg-transparent border-r border-slate-100 dark:border-slate-700/50 relative">
-                          <div className="font-extrabold text-xl text-[#1e3a8a] dark:text-indigo-300 leading-tight">
-                            {(row?.total || 0).toLocaleString()}
-                          </div>
-                          <div className="font-bold text-sm text-indigo-600 dark:text-indigo-400 mt-1">
-                            ({row?.percentage || 0}%)
-                          </div>
-                        </td>
-                        {(row?.monthlyDetails || []).map((detail: any, mIdx: any) => {
-                          const colors = getHeatmapCellClasses(
-                            detail?.calls || 0,
-                            maxVal
-                          );
-                          return (
-                            <td
-                              key={mIdx}
-                              className={`px-2 py-4 text-center transition-colors ${
-                                isCrossFiltered && detail?.calls > 0
-                                  ? "bg-[#fecdd3] dark:bg-[#492738]"
-                                  : colors.bg
-                              }`}
-                            >
-                              {(detail?.calls || 0) > 0 ? (
-                                <>
-                                  <div
-                                    className={`font-extrabold text-[14px] leading-none ${
-                                      isCrossFiltered
-                                        ? "text-[#4c0519] dark:text-[#fff1f2]"
-                                        : colors.textMain
-                                    }`}
-                                  >
-                                    {(detail?.calls || 0).toLocaleString()}
-                                  </div>
-                                  <div
-                                    className={`font-medium text-[11px] mt-1.5 ${
-                                      isCrossFiltered
-                                        ? "text-[#701a35] dark:text-[#ffe4e6]"
-                                        : colors.textSub
-                                    }`}
-                                  >
-                                    ({detail?.percentage || 0}%)
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-slate-300 dark:text-slate-600">-</div>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="px-2 py-4 text-center font-extrabold text-[13px] bg-transparent border-l border-slate-100 dark:border-slate-700/50">
-                          <div
-                            className={`${
-                              (row?.trend || 0) > 0
-                                ? "text-[#e11d48] dark:text-rose-400"
-                                : (row?.trend || 0) < 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-slate-400 dark:text-slate-500"
-                            }`}
-                          >
-                            {(row?.trend || 0) > 0 ? "+" : ""}
-                            {(row?.trend || 0).toFixed(2)}%
-                          </div>
-                        </td>
-{showForecast && <>
-                        <td className="px-3 py-4 text-center bg-transparent border-l border-slate-100 dark:border-slate-700/50">
-                          <div className="font-extrabold text-[16px] text-indigo-700 dark:text-indigo-400">
-                            {(row?.forecast || 0).toLocaleString()}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center bg-transparent border-l border-slate-100 dark:border-slate-700/50 align-middle">
-                          <Sparkline
-                            data={row?.monthly || []}
-                            forecast={row?.forecast || 0}
-                          />
-                        </td>
-</>}
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={visibleMonths.length + (showForecast ? 5 : 3)}
-                      className="text-center py-8 text-slate-400 font-bold text-base"
-                    >
-                      ไม่พบข้อมูล
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              {(tableDef.data || []).length > 0 && (
-                <tfoot className="sticky bottom-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] outline outline-1 outline-indigo-200 dark:outline-slate-700 bg-[#eff6ff] dark:bg-slate-900 print:static">
-                  <tr>
-                    <td className="px-6 py-4 font-black text-indigo-900 dark:text-indigo-300 sticky left-0 z-40 bg-[#eff6ff] dark:bg-slate-900 border-r border-indigo-200 dark:border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-[14px] print:static">
-                      Grand Total (รวมทั้งหมด)
-                    </td>
-                    <td className="px-4 py-4 text-center border-r border-indigo-200 dark:border-slate-700">
-                      <div className="font-black text-xl text-indigo-900 dark:text-indigo-300">
-                        {(grandTotal || 0).toLocaleString()}
-                      </div>
-                      <div className="font-bold text-sm text-indigo-600 dark:text-indigo-500 mt-1">
-                        100%
-                      </div>
-                    </td>
-                    {grandMonthly.map((val, mIdx) => {
-                      let pctText = null;
-                      let pctColor = "text-slate-400 dark:text-slate-500";
-                      if (mIdx > 0) {
-                        const prev = grandMonthly[mIdx - 1];
-                        if (prev > 0) {
-                          const pct = ((val - prev) / prev) * 100;
-                          pctText = `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`;
-                          pctColor =
-                            pct > 0
-                              ? "text-[#e11d48] dark:text-rose-400"
-                              : pct < 0
-                              ? "text-[#10b981] dark:text-emerald-400"
-                              : "text-slate-500 dark:text-slate-400";
-                        } else if (val > 0) {
-                          pctText = "+100.00%";
-                          pctColor = "text-[#e11d48] dark:text-rose-400";
-                        }
-                      }
-                      return (
-                        <td
-                          key={mIdx}
-                          className="px-2 py-4 text-center border-r border-indigo-200/60 dark:border-slate-700 align-middle"
-                        >
-                          <div className="font-black text-lg text-indigo-900 dark:text-indigo-300">
-                            {(val || 0).toLocaleString()}
-                          </div>
-                          {pctText && (
-                            <div
-                              className={`font-extrabold text-[11px] mt-1 ${pctColor}`}
-                            >
-                              {pctText}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="px-2 py-4 text-center border-l border-indigo-200/60 dark:border-slate-700 align-middle">
-                      <div
-                        className={`font-black text-[13px] ${
-                          grandTrend > 0
-                            ? "text-[#e11d48] dark:text-rose-400"
-                            : grandTrend < 0
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-slate-500 dark:text-slate-400"
-                        }`}
-                      >
-                        {grandTrend > 0 ? "+" : ""}
-                        {(grandTrend || 0).toFixed(2)}%
-                      </div>
-                    </td>
-{showForecast && <>
-                    <td className="px-3 py-4 text-center border-l border-indigo-200/60 dark:border-slate-700 align-middle">
-                      <div className="font-black text-[16px] text-indigo-900 dark:text-indigo-300">
-                        {(grandForecast || 0).toLocaleString()}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 border-l border-indigo-200/60 dark:border-slate-700 align-middle text-center">
-                      <Sparkline data={grandMonthly} forecast={grandForecast} />
-                    </td>
-</>}
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-            {hasMore && (
-              <div className="p-4 bg-slate-50/60 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 text-center">
-                <button
-                  onClick={(e: any) => {
-                    e.stopPropagation();
-                    setRowLimits((prev: any) => ({
-                      ...prev,
-                      [tableDef.id]: (prev[tableDef.id] || 15) + 30,
-                    }));
-                  }}
-                  className="px-6 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm font-extrabold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:border-indigo-300 transition-all shadow-sm"
-                >
-                  แสดงผลเพิ่มอีก +30 รายการ
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
+    const years = Array.from(new Set(slots.map((slot: any)=>slot.year))).sort((a: any,b: any)=>a-b) as number[];
+    const spans = Math.max(years.length,1);
+    const leading = branch ? 6 : 3;
+    const tail = branch ? 0 : showForecast ? 3 : 1;
+    const toggleRow = (row: any) => setCrossFilters((previous: any)=>{
+      const selected=new Set(previous[tableDef.keyField]||[]);const value=branch?row.id:row.name;
+      selected.add(value);
+      return {...previous,[tableDef.keyField]:selected};
+    });
+    const toggleCalendarMonth = (month: number) => {
+      const keys=slots.filter((slot: any)=>slot.month===month).map((slot: any)=>slot.label);
+      if(!keys.length)return;
+      setSortMonthsByTable(previous=>{
+        const selected=(previous[tableDef.id]||[]).filter(value=>visibleMonths.includes(value));
+        const all=keys.every((key: string)=>selected.includes(key));
+        return {...previous,[tableDef.id]:all?selected.filter(value=>!keys.includes(value)):Array.from(new Set([...selected,...keys]))};
+      });
+    };
+    return <section key={tableDef.id} data-testid={"table-"+tableDef.id} className="calendar-report bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <button onClick={()=>toggleSection(tableDef.id)} className="w-full px-6 py-5 flex justify-between items-center bg-slate-50 dark:bg-slate-800 text-left text-slate-800 dark:text-slate-100 font-bold">
+        <span>{tableDef.num}. {tableDef.title}</span><span>{source.length} รายการ {openSections[tableDef.id] ? "⌃" : "⌄"}</span>
+      </button>
+      {branch && <div className="px-4 py-2"><input value={branchSearch} onChange={event=>setBranchSearch(event.target.value)} placeholder="ค้นหารหัส หรือชื่อสาขา..." className="w-full md:w-80 px-3 py-2 border rounded-lg bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100" /></div>}
+      {renderSortReset(tableDef.id)}
+      {hasRowSelection && <div className="px-4 py-2 flex items-center justify-between gap-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200">
+        <span>แสดงเฉพาะรายการที่เลือก ({summaryRows.length} รายการ)</span>
+        <button type="button" onClick={()=>setCrossFilters((previous: any)=>({...previous,[tableDef.keyField]:new Set()}))} className="px-3 py-1 rounded-lg font-bold border border-indigo-200 dark:border-indigo-700">ล้างการเลือก</button>
+      </div>}
+      {openSections[tableDef.id] && <div className="overflow-auto max-h-[700px] relative custom-scrollbar">
+        <table className="w-full text-left border-collapse" aria-label={tableDef.title}>
+          <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800 text-indigo-900 dark:text-indigo-200">
+            <tr>
+              <th>{branch?"อันดับ / รหัสสาขา":"รายการวิเคราะห์"}</th>
+              {branch && <><th>ชื่อสาขา</th><th>พื้นที่</th><th>ทีม</th></>}
+              <th>รวม CALLS</th><th className="calendar-year">ปี</th>
+              {th.map((month,index)=>{
+                const keys=slots.filter((slot: any)=>slot.month===index).map((slot: any)=>slot.label);
+                const selected=keys.length>0&&keys.every((key: string)=>(sortMonthsByTable[tableDef.id]||[]).includes(key));
+                return <th key={month}><button type="button" aria-label={"เรียง "+tableDef.id+" "+month} aria-pressed={selected} disabled={!keys.length} onClick={()=>toggleCalendarMonth(index)} className={`w-full py-2 rounded-md text-center ${selected?"bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200":""}`} title="เรียงยอดรวมเดือนนี้จากทุกปีที่แสดง มากไปน้อย">{month}<br/><span aria-hidden="true">{selected?"✓ ↓":"↕"}</span></button></th>;
+              })}
+              {!branch && <><th style={{whiteSpace:"pre-line"}}>{getTrendHeader()}</th>{showForecast&&<><th>ประมาณการ<br/>(หาร {latestMonthMaxDay} วัน × 30)</th><th>กราฟประมาณการ</th></>}</>}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRows.flatMap((row: any)=>years.map((year,yearIndex)=>{
+              const selected=crossFilters[tableDef.keyField]?.has(branch?row.id:row.name);
+              const max=getRowMaxVal(row.monthly||[]);
+              return <tr key={(branch?row.id:row.name)+"-"+year} data-item={branch?row.id:row.name} data-year={year} aria-selected={!!selected} onClick={()=>toggleRow(row)} className={`cursor-pointer border-b border-slate-100 dark:border-slate-700 ${selected?"bg-indigo-50 dark:bg-indigo-950":""}`}>
+                {yearIndex===0&&<>
+                  <td rowSpan={spans} className={`font-bold text-slate-800 dark:text-slate-100 ${selected?"border-l-4 border-indigo-500":""}`} title={row.name}>{selected?"● ":""}{branch?`${row.rank}. ${row.id}`:row.name}</td>
+                  {branch&&<><td rowSpan={spans} className="text-slate-800 dark:text-slate-100">{row.name}</td><td rowSpan={spans}>{row.area}</td><td rowSpan={spans}>{row.team}</td></>}
+                  <td rowSpan={spans} className="text-center font-extrabold text-indigo-800 dark:text-indigo-300"><div>{Number(row.total||0).toLocaleString()}</div>{!branch&&<div className="mt-1">({row.percentage||"0.00"}%)</div>}</td>
+                </>}
+                <td className="calendar-year text-center font-bold text-indigo-800 dark:text-indigo-200 bg-blue-50 dark:bg-slate-900">{year}</td>
+                {th.map((_,month)=>{
+                  const slot=slots.find((entry: any)=>entry.year===year&&entry.month===month);
+                  const value=slot?Number(row.monthly?.[slot.index]||0):null;
+                  const colors=getHeatmapCellClasses(value||0,max);
+                  const pct=slot?row.monthlyDetails?.[slot.index]?.percentage:undefined;
+                  return <td key={month} data-month={month} className={`text-center ${value===null?"bg-white dark:bg-slate-800":colors.bg}`}>
+                    <span className={`font-bold ${colors.textMain}`}>{value===null?"—":value.toLocaleString()}</span>
+                    {pct!==undefined&&value!==null&&<span className={`block mt-1 ${colors.textSub}`}>({pct}%)</span>}
+                  </td>;
+                })}
+                {yearIndex===0&&!branch&&<>
+                  <td rowSpan={spans} className={`text-center font-bold ${(row.trend||0)>0?"text-rose-600":"text-emerald-600"}`}>{(row.trend||0)>0?"+":""}{Number(row.trend||0).toFixed(2)}%</td>
+                  {showForecast&&<><td rowSpan={spans} className="text-center font-bold text-indigo-700 dark:text-indigo-300">{Number(row.forecast||0).toLocaleString()}</td><td rowSpan={spans}><Sparkline data={row.monthly||[]} forecast={row.forecast||0}/></td></>}
+                </>}
+              </tr>;
+            }))}
+            {!visibleRows.length&&<tr><td colSpan={leading+12+tail} className="text-center text-slate-500">ไม่พบข้อมูล</td></tr>}
+          </tbody>
+          {source.length>0&&<YearMonthSummary months={visibleMonths} totals={grandMonthly} total={grandTotal} label={tableDef.title+" สรุปรายปี"} labelColumns={leading} tailColumns={tail}/>}
+        </table>
+        {summaryRows.length>limit&&<button type="button" className="w-full p-3 font-bold text-indigo-600 bg-slate-50 dark:bg-slate-900" onClick={()=>setRowLimits((previous: any)=>({...previous,[tableDef.id]:limit+30}))}>แสดงผลเพิ่มอีก +30 รายการ</button>}
+      </div>}
+    </section>;
   };
 
   // ==========================================
@@ -2586,17 +2206,18 @@ export default function App() {
   const storeLimit = rowLimits["sec6"] || 15;
   const visibleBranches = sortTableRows(branchTableData, "sec6").slice(0, storeLimit);
   const hasMoreBranches = branchTableData.length > storeLimit;
-  const grandBranchTotal = branchTableData.reduce(
+  const branchSummaryRows = getSummaryRows(branchTableData, "storeCode", "id");
+  const grandBranchTotal = branchSummaryRows.reduce(
     (acc: any, row: any) => acc + (row?.total || 0),
     0
   );
   const grandBranchMonthly = Array(visibleMonths.length).fill(0);
-  branchTableData.forEach((row: any) => {
+  branchSummaryRows.forEach((row: any) => {
     if(row) (row?.monthly || []).forEach((val: any, i: any) => (grandBranchMonthly[i] += val));
   });
 
   return (
-    <div className="min-h-screen bg-[#f3f7fb] dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans antialiased pb-12 print:bg-white print:pb-0 text-left transition-colors duration-300">
+    <div className="dashboard-shell min-h-screen bg-[#f3f7fb] dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans antialiased pb-12 print:bg-white print:pb-0 text-left transition-colors duration-300">
       <header className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 dark:from-slate-950 dark:via-slate-900 dark:to-black text-white sticky top-0 z-40 shadow-md print:hidden transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4">
@@ -2676,11 +2297,97 @@ export default function App() {
         .dashboard-fit table td svg { max-width: 100%; height: auto; }
         .dashboard-fit svg { min-width: 0 !important; }
         .dashboard-fit table .truncate { white-space: normal; }
+        .dashboard-fit .calendar-report table th.calendar-year, .dashboard-fit .calendar-report table td.calendar-year { width: 48px; white-space: nowrap; }
+        .dashboard-fit .calendar-report tbody td { vertical-align: middle; }
+        .dashboard-fit table .year-month-footer td { width: auto !important; padding: 5px 2px !important; font-size: clamp(9px, .8vw, 12px); }
         .dashboard-fit table td > div:not(:has(svg)), .dashboard-fit table th > div {
           transform: scale(1.18);
           transform-origin: center;
         }
         .dashboard-fit table td:first-child > div { transform-origin: left center; }
+
+        .dashboard-shell { background-image: radial-gradient(ellipse at top left, #e7efff 0, transparent 52%); }
+        .dashboard-shell header { border-bottom: 1px solid #5367a0; }
+        .dashboard-fit > section, .dashboard-fit section.calendar-report,
+        .dashboard-fit section[data-testid="year-comparison-chart"] {
+          border-color: #ccd9eb;
+          box-shadow: 0 4px 18px -12px #23467355;
+        }
+        .dashboard-fit .calendar-report > button:first-child {
+          background: linear-gradient(110deg, #edf3ff, #f8fafc 70%);
+          color: #173b70;
+          border-bottom: 1px solid #c4d4eb;
+          box-shadow: inset 4px 0 #6366f1;
+        }
+        .dashboard-fit .calendar-report > button:first-child > span:last-child {
+          color: #4f46e5;
+          font-variant-numeric: tabular-nums;
+        }
+        .dashboard-fit table { border-color: #c7d5e7; }
+        .dashboard-fit table th, .dashboard-fit table td {
+          border-right: 1px solid #c7d5e7;
+          border-bottom: 1px solid #d4dfed;
+          font-variant-numeric: tabular-nums;
+        }
+        .dashboard-fit table th:last-child, .dashboard-fit table td:last-child { border-right: 0; }
+        .dashboard-fit table thead {
+          background: linear-gradient(110deg, #173b70, #24548d);
+          color: #fff;
+          box-shadow: 0 2px 5px #173b7026;
+        }
+        .dashboard-fit table thead th { color: #fff; border-color: #55749d; font-weight: 800; }
+        .dashboard-fit .calendar-report thead th.calendar-year { background: #1c477e; }
+        .dashboard-fit .calendar-report thead button { color: #fff; }
+        .dashboard-fit .calendar-report thead button:hover:not(:disabled) { background: #ffffff20; }
+        .dashboard-fit .calendar-report thead button[aria-pressed="true"] {
+          background: #dce7ff; color: #312e81; box-shadow: inset 0 -3px #a5b4fc;
+        }
+        .dashboard-fit .calendar-report tbody td.calendar-year { background: #edf3fc; color: #284e80; font-weight: 800; }
+        .dashboard-fit .calendar-report tbody td[rowspan] { background-color: #f8faff; }
+        .dashboard-fit .calendar-report tbody tr[aria-selected="true"] td[rowspan] { background-color: #e8eaff; }
+        .dashboard-fit .calendar-report tbody tr:hover td { box-shadow: inset 0 0 0 999px #4f46e509; }
+        .dashboard-fit .year-month-footer { box-shadow: 0 -3px 10px #173b701a; }
+        .dashboard-fit .year-month-footer tr:first-child td { border-color: #6686ad !important; }
+        .dashboard-fit button:focus-visible, .dashboard-fit input:focus-visible, .dashboard-fit select:focus-visible {
+          outline: 3px solid #818cf8; outline-offset: 2px;
+        }
+        .dark .dashboard-shell { background-image: radial-gradient(ellipse at top left, #1e2b4a 0, transparent 52%); }
+        .dark .dashboard-fit section.calendar-report,
+        .dark .dashboard-fit section[data-testid="year-comparison-chart"] { border-color: #40516d; }
+        .dark .dashboard-fit .calendar-report > button:first-child { background: linear-gradient(110deg, #263650, #1e293b); color: #e0e7ff; border-color: #495d7e; }
+        .dark .dashboard-fit .calendar-report > button:first-child > span:last-child { color: #c7d2fe; }
+        .dark .dashboard-fit table th, .dark .dashboard-fit table td { border-color: #465875; }
+        .dark .dashboard-fit table thead { background: linear-gradient(110deg, #172d50, #244673); }
+        .dark .dashboard-fit .calendar-report tbody td.calendar-year { background: #243550; color: #c7d2fe; }
+        .dark .dashboard-fit .calendar-report tbody td[rowspan] { background-color: #202d43; }
+        .dark .dashboard-fit .calendar-report tbody tr[aria-selected="true"] td[rowspan] { background-color: #343b69; }
+        .dashboard-shell { color: #172b49; font-weight: 500; }
+        .dashboard-shell :is(button, input, select) { font-weight: 600; }
+        .dashboard-shell :is(h1, h2, h3, h4, th) { font-weight: 800; }
+        .dashboard-shell :is(.text-slate-400, .text-slate-500) { color: #475569; }
+        .dashboard-shell .text-slate-600 { color: #334155; }
+        .dashboard-shell :is(.text-emerald-400, .text-emerald-500, .text-emerald-600) { color: #047857; }
+        .dashboard-shell :is(.text-rose-500, .text-rose-600) { color: #be123c; }
+        .dashboard-shell .text-indigo-500 { color: #4f46e5; }
+        .dashboard-fit table thead th { text-align: center !important; vertical-align: middle; }
+        .dashboard-fit table thead th button { text-align: center; }
+        .dashboard-fit .calendar-report tbody td { font-weight: 600; }
+        .dashboard-fit .calendar-report tbody td > span.block { font-weight: 600; }
+        .dashboard-shell svg text { font-weight: 600; }
+        .dashboard-shell svg text[fill="#f97316"] { fill: #c2410c; }
+        .dashboard-shell svg text[fill="#6366f1"] { fill: #4f46e5; }
+        .dashboard-shell header :is(.text-emerald-400, .text-emerald-500) { color: #6ee7b7; }
+        .dark .dashboard-shell { color: #e2e8f0; }
+        .dark .dashboard-shell :is(.text-slate-400, .text-slate-500, .text-slate-600) { color: #cbd5e1; }
+        .dark .dashboard-shell :is(.text-emerald-400, .text-emerald-500, .text-emerald-600) { color: #6ee7b7; }
+        .dark .dashboard-shell :is(.text-rose-500, .text-rose-600) { color: #fda4af; }
+        .dark .dashboard-shell .text-indigo-500 { color: #c7d2fe; }
+        .dark .dashboard-shell svg text[fill="#f97316"] { fill: #fdba74; }
+        .dark .dashboard-shell svg text[fill="#6366f1"] { fill: #c7d2fe; }
+        @media print {
+          .dashboard-shell { background-image: none; }
+          .dashboard-fit table th, .dashboard-fit table td { print-color-adjust: exact; }
+        }
 
       `}</style>
       <main className="dashboard-fit w-full max-w-[1800px] mx-auto px-3 md:px-5 mt-6">
@@ -2745,8 +2452,9 @@ export default function App() {
 
             <section className="mb-8 text-left">
               <TrendLineChart
-                data={top5ProductsForTrend}
+                data={chartAggregatedData.products}
                 months={visibleMonths}
+                combineDefault={filterProduct.length === 0 && crossFilters.product.size === 0}
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:break-inside-avoid">
                 <ParetoChart
@@ -2803,226 +2511,7 @@ export default function App() {
                 },
               ].map(renderStandardTable)}
 
-              {/* 6. TABLE: BRANCH CALL STATUS */}
-              <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200/85 dark:border-slate-700 shadow-sm overflow-hidden print:break-inside-avoid text-left transition-colors">
-                <div className="px-6 py-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <span className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <span className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-sm font-black flex items-center justify-center rounded-lg">
-                      6
-                    </span>
-                    สรุปปริมาณสายการโทรแจ้งซ่อมรายสาขา (Branch Call Volume)
-                  </span>
-
-                  <div className="relative w-full md:w-80 print:hidden">
-                    <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="ค้นหารหัส หรือชื่อสาขา..."
-                      value={branchSearch}
-                      onChange={(e) => setBranchSearch(e.target.value)}
-                      className="w-full text-sm bg-white dark:bg-slate-900 pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all font-semibold"
-                    />
-                  </div>
-                </div>
-
-                {renderSortReset("sec6")}
-                <div className="overflow-x-auto max-h-[700px] custom-scrollbar relative print:max-h-none print:overflow-visible">
-                  <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 shadow-sm print:static">
-                      <tr className="text-sm font-extrabold text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
-                        <th className="px-5 py-4 sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 print:static">
-                          <div className="flex items-center gap-3">
-                            <span className="w-10 text-center text-slate-400 dark:text-slate-500">
-                              อันดับ
-                            </span>
-                            <span>รหัสสาขา</span>
-                          </div>
-                        </th>
-                        <th className="px-5 py-4 min-w-[200px]">ชื่อสาขา</th>
-                        <th className="px-4 py-4 text-center">
-                          พื้นที่ (AREA)
-                        </th>
-                        <th className="px-4 py-4 text-center">ทีม (TEAM)</th>
-                        <th className="px-4 py-4 text-center bg-slate-200/60 dark:bg-slate-700/60 font-extrabold">
-                          รวม CALL
-                        </th>
-                        {visibleMonths.map((m: any) => (
-                          <th key={m} className="px-2 py-4 text-center min-w-[60px]">
-                            {renderSortMonth("sec6", m)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      {visibleBranches.length > 0 ? (
-                        visibleBranches.map((branch: any, idx: any) => {
-                          if (!branch) return null; // 🔥 ป้องกันตัวแปร branch เป็น undefined
-                          const maxVal = getRowMaxVal(branch?.monthly || []);
-
-                          const isCrossFiltered = crossFilters[
-                            "storeCode"
-                          ]?.has(branch?.id);
-
-                          return (
-                            <tr
-                              key={idx}
-                              className={`border-b border-slate-100 dark:border-slate-700/50 hover:bg-indigo-50/50 dark:hover:bg-slate-700/50 transition-all cursor-pointer group ${
-                                isCrossFiltered
-                                  ? "bg-indigo-50/40 dark:bg-indigo-900/30 font-bold"
-                                  : ""
-                              }`}
-                              onClick={() => {
-                                setCrossFilters((prev: any) => {
-                                  const next = { ...prev };
-                                  const newSet = new Set(
-                                    next["storeCode"] || []
-                                  );
-                                  if (newSet.has(branch?.id))
-                                    newSet.delete(branch?.id);
-                                  else if(branch?.id) newSet.add(branch?.id);
-                                  next["storeCode"] = newSet;
-                                  return next;
-                                });
-                              }}
-                            >
-                              <td
-                                className={`px-5 py-4 font-bold sticky left-0 z-10 border-r border-slate-100 dark:border-slate-700/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors print:static ${
-                                  isCrossFiltered
-                                    ? "bg-indigo-50 dark:bg-slate-800 border-l-4 border-l-indigo-600 dark:border-l-indigo-500 text-indigo-700 dark:text-indigo-400"
-                                    : "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400"
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span
-                                    className={`flex items-center justify-center w-10 h-8 rounded-lg text-sm font-black print:border ${
-                                      branch?.rank === 1
-                                        ? "bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400"
-                                        : branch?.rank === 2
-                                        ? "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                        : branch?.rank === 3
-                                        ? "bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400"
-                                        : "bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
-                                    }`}
-                                  >
-                                    {branch?.rank}
-                                  </span>
-                                  {isCrossFiltered && (
-                                    <span className="w-3 h-3 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-pulse flex-shrink-0"></span>
-                                  )}
-                                  <span className="text-base">{branch?.id}</span>
-                                </div>
-                              </td>
-                              <td
-                                className="px-5 py-4 text-slate-900 dark:text-slate-100 font-extrabold truncate max-w-[250px] print:whitespace-normal text-base"
-                                title={branch?.name}
-                              >
-                                {branch?.name}
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <span className="bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-md text-slate-600 dark:text-slate-300 font-bold print:border text-sm">
-                                  {branch?.area}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <span className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-md text-indigo-700 dark:text-indigo-300 font-bold print:border text-sm">
-                                  {branch?.team}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4 text-center font-black text-lg bg-transparent text-[#1e3a8a] dark:text-indigo-300">
-                                {(branch?.total || 0).toLocaleString()}
-                              </td>
-                              {(branch?.monthly || []).map((val: any, mIdx: any) => {
-                                const colors = getHeatmapCellClasses(
-                                  val || 0,
-                                  Math.max(maxVal, 5)
-                                );
-                                return (
-                                  <td
-                                    key={mIdx}
-                                    className={`px-2 py-4 text-center font-extrabold text-sm transition-colors print:border-l ${
-                                      isCrossFiltered && val > 0
-                                        ? "bg-[#fecdd3] dark:bg-[#492738] text-[#4c0519] dark:text-[#fff1f2]"
-                                        : colors.bg
-                                    } ${
-                                      !isCrossFiltered && val > 0
-                                        ? colors.textMain
-                                        : ""
-                                    } ${!val ? "text-slate-300 dark:text-slate-600" : ""}`}
-                                  >
-                                    {val > 0
-                                      ? (val || 0).toLocaleString()
-                                      : "-"}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={visibleMonths.length + (showForecast ? 5 : 3)}
-                            className="text-center py-10 text-slate-400 dark:text-slate-500 font-bold text-base"
-                          >
-                            ไม่พบข้อมูลสาขาที่ค้นหา
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                    {branchTableData.length > 0 && (
-                      <tfoot className="sticky bottom-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] outline outline-1 outline-indigo-200 dark:outline-slate-700 bg-[#eff6ff] dark:bg-slate-900 print:static">
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-5 py-4 font-black text-indigo-900 dark:text-indigo-300 sticky left-0 z-40 bg-[#eff6ff] dark:bg-slate-900 border-r border-indigo-200 dark:border-slate-700 text-right pr-6 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-base print:static"
-                          >
-                            Grand Total (รวมทั้งหมด)
-                          </td>
-                          <td className="px-4 py-4 text-center font-black text-xl text-indigo-900 dark:text-indigo-300 border-r border-indigo-200 dark:border-slate-700 align-middle">
-                            {(grandBranchTotal || 0).toLocaleString()}
-                          </td>
-                          {grandBranchMonthly.map((val: any, mIdx: any) => {
-                            let pctText = null;
-                            let pctColor = "text-slate-400 dark:text-slate-500";
-                            if (mIdx > 0 && grandBranchMonthly[mIdx - 1] > 0) {
-                              const pct =
-                                ((val - grandBranchMonthly[mIdx - 1]) /
-                                  grandBranchMonthly[mIdx - 1]) *
-                                100;
-                              pctColor =
-                                pct > 0
-                                  ? "text-[#e11d48] dark:text-rose-400"
-                                  : pct < 0
-                                  ? "text-[#10b981] dark:text-emerald-400"
-                                  : "text-slate-500 dark:text-slate-400";
-                              pctText = `${pct > 0 ? "+" : ""}${pct.toFixed(
-                                2
-                              )}%`;
-                            }
-                            return (
-                              <td
-                                key={mIdx}
-                                className="px-2 py-4 text-center border-r border-indigo-200/60 dark:border-slate-700 align-middle"
-                              >
-                                <div className="font-black text-base text-indigo-900 dark:text-indigo-300">
-                                  {(val || 0).toLocaleString()}
-                                </div>
-                                {pctText && (
-                                  <div
-                                    className={`font-extrabold text-[11px] mt-1 ${pctColor}`}
-                                  >
-                                    {pctText}
-                                  </div>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-              </div>
+              {renderStandardTable({id:"sec6",num:6,title:"สรุปปริมาณสายการโทรแจ้งซ่อมรายสาขา (Branch Call Volume)",data:branchTableData,keyField:"storeCode"})}
 
               {[
                 {
