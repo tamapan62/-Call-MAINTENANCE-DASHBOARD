@@ -722,7 +722,7 @@ const Sparkline = ({ data, forecast }: any) => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center w-full min-w-[160px]">
+    <div className="flex flex-col items-center justify-center w-full min-w-0">
       {forecast !== undefined && len >= 2 && (
         <div
           className={`text-sm font-extrabold w-full text-right pr-2 mb-1.5 ${trendColorClass}`}
@@ -730,7 +730,7 @@ const Sparkline = ({ data, forecast }: any) => {
           {trendText}
         </div>
       )}
-      <svg width={width} height={height} className={`overflow-visible mx-auto ${forecastTrend > 0 ? "text-rose-600 dark:text-rose-500" : forecastTrend < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
+      <svg role="img" aria-label="กราฟประมาณการ" viewBox={`-4 -4 ${width+8} ${height+8}`} width={width} height={height} className={`w-full overflow-visible mx-auto ${forecastTrend > 0 ? "text-rose-600 dark:text-rose-500" : forecastTrend < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>
         {len > 1 && (
           <polyline
             fill="none"
@@ -753,9 +753,9 @@ const Sparkline = ({ data, forecast }: any) => {
           />
         )}
         {mainPointsArr.map((p: any, i: any) => (
-          <circle key={`dot-${i}`} cx={p.x} cy={p.y} r="4" fill="currentColor" stroke="currentColor" className="text-white dark:text-slate-800" style={{ stroke: strokeColor }} strokeWidth="2.5" />
+          <circle key={`dot-${i}`} cx={p.x} cy={p.y} r="2.5" fill={strokeColor} />
         ))}
-        <circle cx={lastX} cy={lastY} r="5.5" fill="currentColor" stroke="currentColor" className="text-white dark:text-slate-800 drop-shadow-sm" style={{ fill: strokeColor }} strokeWidth="2" />
+        <circle cx={lastX} cy={lastY} r="3.5" fill={strokeColor} />
       </svg>
     </div>
   );
