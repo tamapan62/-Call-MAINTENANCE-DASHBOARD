@@ -324,6 +324,7 @@ const getRowMaxVal = (monthlyArray: any) => Math.max(...(monthlyArray || []), 1)
 // ==========================================
 
 const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: any) => {
+const TrendLineChart = ({ data, months, forecastInfo }: any) => {
   const [focusedProduct, setFocusedProduct] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
   const monthKeys = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -347,6 +348,7 @@ const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: 
   }, [data, months]);
   const focusedExists = (data || []).some((product: any) => product.name === focusedProduct);
   const showCombined = combineDefault && !focusedExists;
+  const showCombined = !focusedExists;
   const shown = showCombined
     ? Array.from(new Set(series.map((item: any) => item.year))).map(year => ({
         name: "Call รวมทุกอุปกรณ์", year, color: colors[0], productIndex: 0,
@@ -451,6 +453,7 @@ const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: 
       </svg>
       {hasProjection && <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">* {thaiMonths[forecastMonth]} {forecastYear} ยอดจริงจากข้อมูลวันที่ 1–{forecastInfo.day} · ประมาณการปิดเดือน = ยอดจริง ÷ {forecastInfo.day} × 30 วัน</p>}
       <div className="flex flex-wrap justify-center gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+        <button type="button" onClick={()=>setFocusedProduct(null)} aria-pressed={showCombined} className={`px-3 py-2 rounded-lg border text-sm font-bold transition-colors ${showCombined ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-200 border-indigo-200 dark:border-indigo-700"}`}>ทุกอุปกรณ์</button>
         {(data || []).map((product: any, index: number) => <button type="button" key={product.name} onClick={()=>setFocusedProduct(focusedProduct===product.name ? null : product.name)} aria-pressed={focusedProduct===product.name}
           className="px-3 py-2 rounded-lg border text-sm font-bold" style={{color:colors[index % colors.length],borderColor:focusedProduct===product.name ? colors[index % colors.length] : "transparent"}}>{product.name}</button>)}
       </div>
