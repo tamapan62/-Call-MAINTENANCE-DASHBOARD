@@ -323,7 +323,7 @@ const getRowMaxVal = (monthlyArray: any) => Math.max(...(monthlyArray || []), 1)
 // 2. CHART & UI COMPONENTS
 // ==========================================
 
-const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
+const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: any) => {
   const [focusedProduct, setFocusedProduct] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
   const monthKeys = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -360,10 +360,18 @@ const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
   const current = shown.filter((item: any) => item.year === currentYear);
   const lines = shown.filter((item: any) => item.year !== currentYear).map((item: any) => ({...item, color: singleProduct ? "#f97316" : item.color}));
   const years: number[] = Array.from(new Set(series.map((item: any) => item.year))).sort((a: any, b: any) => a - b) as number[];
-  const max = Math.max(1, ...shown.flatMap((item: any) => item.values.filter((v: any) => v !== null)));
+  const forecastParts = String(forecastInfo?.label || "").split("-");
+  const forecastMonth = monthKeys.findIndex((m,i) => m.toLowerCase() === forecastParts[0]?.trim().toLowerCase() || thaiMonths[i] === forecastParts[0]?.trim());
+  let forecastYear = Number(forecastParts[1]?.trim());
+  if (forecastYear < 100) forecastYear += 2000;
+  if (forecastYear > 2400) forecastYear -= 543;
+  const projection = (item: any, month: number) => forecastInfo && item.year === forecastYear && month === forecastMonth && item.values[month] !== null ? Math.round(item.values[month] / forecastInfo.day * 30) : null;
+  const hasProjection = current.some((item: any) => projection(item, forecastMonth) !== null);
+  const maxProjection = Math.max(0, ...current.map((item: any) => projection(item, forecastMonth) || 0));
+  const max = Math.max(1, maxProjection, ...shown.flatMap((item: any) => item.values.filter((v: any) => v !== null)));
   const ceiling = Math.ceil(max * 1.2);
   const width = 1200, height = 470;
-  const padding = {left: 75, right: 30, top: 48, bottom: 54};
+  const padding = {left: 75, right: hasProjection && singleProduct ? 180 : 30, top: 48, bottom: 54};
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const step = plotWidth / 12;
@@ -396,6 +404,18 @@ const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
         {current.map((item: any, index: number) => <g key={item.name + item.year} data-year={item.year} data-chart-type="bar">
           {item.values.map((value: number | null, month: number) => value === null ? null : <g key={month}>
             <rect x={x(month) - current.length * barWidth / 2 + index * barWidth} y={y(value)} width={Math.max(2, barWidth - 2)} height={padding.top+plotHeight-y(value)} rx="3" fill={item.color} fillOpacity="0.8"><title>{tip(item, month, value)}</title></rect>
+            {projection(item, month) !== null && <g data-testid="forecast-bar" data-actual={value} data-forecast={projection(item, month)}>
+              <rect x={x(month) - current.length * barWidth / 2 + index * barWidth} y={y(projection(item, month)!)} width={Math.max(2,barWidth-2)} height={Math.max(0,y(value)-y(projection(item, month)!))} fill="#bae6fd" fillOpacity="0.7" stroke="#0284c7" strokeWidth="2" strokeDasharray="5 3"><title>ประมาณการปิดเดือน {thaiMonths[month]} {item.year}: {projection(item, month)!.toLocaleString()} Calls · ยอดจริง 1–{forecastInfo.day} {thaiMonths[month]}: {value.toLocaleString()} Calls</title></rect>
+              {singleProduct && <g>
+                <line x1={x(month)+barWidth/2} x2={width-padding.right+12} y1={y(projection(item, month)!)} y2={y(projection(item, month)!)} stroke="#0284c7" strokeDasharray="3 3" />
+                <rect x={width-padding.right+12} y={y(projection(item, month)!)-54} width="158" height="52" rx="8" fill="#e0f2fe" stroke="#38bdf8" />
+                <text x={width-padding.right+91} y={y(projection(item, month)!)-36} textAnchor="middle" fontSize="12" fill="#0c4a6e">ประมาณการปิดเดือน (30 วัน)</text>
+                <text x={width-padding.right+91} y={y(projection(item, month)!)-15} textAnchor="middle" fontSize="17" fontWeight="800" fill="#075985">{projection(item, month)!.toLocaleString()} Calls</text>
+                <rect x={width-padding.right+12} y={Math.max(y(value)+8,y(projection(item, month)!)+12)} width="158" height="56" rx="8" fill="#eef2ff" stroke="#a5b4fc" />
+                <text x={width-padding.right+91} y={Math.max(y(value)+8,y(projection(item, month)!)+12)+17} textAnchor="middle" fontSize="12" fill="#312e81">ยอดจริง 1–{forecastInfo.day} {thaiMonths[month]} {item.year}</text>
+                <text x={width-padding.right+91} y={Math.max(y(value)+8,y(projection(item, month)!)+12)+39} textAnchor="middle" fontSize="17" fontWeight="800" fill="#312e81">{value.toLocaleString()} Calls</text>
+              </g>}
+            </g>}
             {showNumbers && <text x={x(month)} y={y(value)-10} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
           </g>)}
         </g>)}
@@ -411,6 +431,7 @@ const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
         })}
         {thaiMonths.map((month,index)=><text key={month} x={x(index)} y={height-17} textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" className="text-slate-700 dark:text-slate-300">{month}</text>)}
       </svg>
+      {hasProjection && <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">* {thaiMonths[forecastMonth]} {forecastYear} ยอดจริงจากข้อมูลวันที่ 1–{forecastInfo.day} · ประมาณการปิดเดือน = ยอดจริง ÷ {forecastInfo.day} × 30 วัน</p>}
       <div className="flex flex-wrap justify-center gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
         {(data || []).map((product: any, index: number) => <button type="button" key={product.name} onClick={()=>setFocusedProduct(focusedProduct===product.name ? null : product.name)} aria-pressed={focusedProduct===product.name}
           className="px-3 py-2 rounded-lg border text-sm font-bold" style={{color:colors[index % colors.length],borderColor:focusedProduct===product.name ? colors[index % colors.length] : "transparent"}}>{product.name}</button>)}
@@ -419,7 +440,7 @@ const TrendLineChart = ({ data, months, combineDefault = false }: any) => {
   );
 };
 
-const YearMonthSummary = ({ months, totals, total, label = "สรุปรายปี", labelColumns = 2, tailColumns = 0 }: any) => {
+const YearMonthSummary = ({ months, totals, total, label = "สรุปรายปี", labelColumns = 2, tailColumns = 0, forecastInfo }: any) => {
   const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const thai = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   const slots = (months || []).map((month: string, index: number) => {
@@ -435,8 +456,11 @@ const YearMonthSummary = ({ months, totals, total, label = "สรุปรา�
   const latest = years[years.length-1];
   const valueAt = (year: number, month: number) => slots.find((s: any)=>s.year===year && s.m===month)?.value;
   const percent = (value: number, base: number | undefined) => base === undefined || base===0 ? null : (value-base)/base*100;
-  const yoy = thai.map((_,m)=>{const value=valueAt(latest,m);return value===undefined ? null : percent(value,valueAt(latest-1,m));});
-  const mom = thai.map((_,m)=>{const value=valueAt(latest,m);return m===0||value===undefined ? null : percent(value,valueAt(latest,m-1));});
+  const projectedSlot = forecastInfo ? slots[(months || []).indexOf(forecastInfo.label)] : null;
+  const projected = projectedSlot && forecastInfo.day > 0 ? Math.round(projectedSlot.value / forecastInfo.day * 30) : null;
+  const comparisonValue = (m: number) => projected !== null && projectedSlot.year === latest && projectedSlot.m === m ? projected : valueAt(latest,m);
+  const yoy = thai.map((_,m)=>{const value=comparisonValue(m);return value===undefined ? null : percent(value,valueAt(latest-1,m));});
+  const mom = thai.map((_,m)=>{const value=comparisonValue(m);return m===0||value===undefined ? null : percent(value,valueAt(latest,m-1));});
   const styleFor = (value: number | null) => value===null ? {} : {backgroundColor:value>0 ? (value>=20 ? "#fda4af" : "#fef3c7") : value<0 ? "#a7f3d0" : "#f1f5f9",color:value>0 ? "#881337" : value<0 ? "#064e3b" : "#334155"};
   const cell = {width:"auto",fontSize:"inherit",textAlign:"center" as const,border:"1px solid #cbd5e1",backgroundColor:"#f8fafc",color:"#0f172a",whiteSpace:"nowrap" as const};
   const labelStyle = {...cell,backgroundColor:"#eff6ff",color:"#1e3a8a",fontWeight:800};
@@ -447,10 +471,12 @@ const YearMonthSummary = ({ months, totals, total, label = "สรุปรา�
   </tr>;
   return <tfoot data-testid="year-month-summary" className="year-month-footer sticky bottom-0 z-30 bg-white print:static" aria-label={label}>
     <tr><td colSpan={labelColumns+12+tailColumns} style={{...cell,backgroundColor:"#123e73",color:"white",fontWeight:800,textAlign:"center"}}>ผลรวมทั้งหมด และเปรียบเทียบปี และเดือน</td></tr>
+    <tr><td colSpan={labelColumns} style={{...cell,backgroundColor:"#123e73",color:"white",fontWeight:800}}>ปี / เดือน</td>{thai.map(name=><td key={name} style={{...cell,backgroundColor:"#123e73",color:"white",fontWeight:800}}>{name}</td>)}{tail}</tr>
     {years.map(year=><tr key={year}><td colSpan={labelColumns} style={labelStyle}>{year}</td>{thai.map((_,m)=><td key={m} style={cell}><span>{valueAt(year,m)?.toLocaleString() || (valueAt(year,m)===0 ? "0" : "")}</span></td>)}{tail}</tr>)}
+    {projected !== null && <tr data-testid="summary-forecast-row"><td colSpan={labelColumns} style={{...labelStyle,backgroundColor:"#dbeafe"}}>ประมาณการปิดเดือน {thai[projectedSlot.m]} {projectedSlot.year}</td>{thai.map((_,m)=><td key={m} style={{...cell,backgroundColor:"#e0f2fe",color:"#1e3a8a",fontWeight:800}}>{m===projectedSlot.m ? projected.toLocaleString() : "—"}</td>)}{tail}</tr>}
     {changeRow(`% เทียบปี ${latest} / ${latest-1}`,yoy)}
     {changeRow(`% เทียบเดือนปี ${latest}`,mom)}
-    <tr><td colSpan={labelColumns+12+tailColumns} style={{...labelStyle,textAlign:"left"}}>Grand Total (รวมทั้งหมด): {Number(total||0).toLocaleString()} Calls</td></tr>
+    <tr><td colSpan={labelColumns+12+tailColumns} style={{...labelStyle,textAlign:"left"}}>Grand Total (รวมทั้งหมด): {Number(total||0).toLocaleString()} Calls{projected !== null && <span className="block text-right text-xs mt-1">* {thai[projectedSlot.m]} {projectedSlot.year} เปรียบเทียบโดยใช้ประมาณการปิดเดือนจากยอดจริงวันที่ 1–{forecastInfo.day} (ยอดจริง ÷ {forecastInfo.day} × 30 วัน)</span>}</td></tr>
   </tfoot>;
 };
 
@@ -994,6 +1020,7 @@ export default function App() {
   const [dynamicLists, setDynamicLists] = useState<any>({
     months: [],
     products: [],
+    callTypes: [],
     problems: [],
     systems: [],
     damagedParts: [],
@@ -1003,6 +1030,7 @@ export default function App() {
     branches: [],
   });
 
+  const [filterCallType, setFilterCallType] = useState<any[]>([]);
   const [filterProduct, setFilterProduct] = useState<any[]>([]);
   const [filterProblem, setFilterProblem] = useState<any[]>([]);
   const [filterCause, setFilterCause] = useState<any[]>([]);
@@ -1108,6 +1136,7 @@ export default function App() {
   const resetFilters = () => {
     setSortMonthsByTable({});
     setFilterProduct([]);
+    setFilterCallType([]);
     setFilterProblem([]);
     setFilterCause([]);
     setFilterDamagedPart([]);
@@ -1258,6 +1287,11 @@ export default function App() {
       if (parsedArray.length < 2) throw new Error("ไฟล์ว่างเปล่าหรือมีรูปแบบไม่ถูกต้อง");
 
       const headers = parsedArray[0].map((h: any) => (h ? h.trim() : ""));
+      const callTypeIndex = headers.findIndex((h: string) => ["calltype", "ประเภทcall", "ประเภทการแจ้ง", "ประเภทงาน"].includes(h.toLowerCase().replace(/[\s_-]/g, "")));
+      const readCallType = (row: any[]) => {
+        const value = callTypeIndex >= 0 ? String(row[callTypeIndex] || "").trim() : "";
+        return !value || value.toUpperCase() === "NULL" ? "ไม่ได้ระบุ" : value.toUpperCase();
+      };
       const records: any[] = [];
       const branchMap = new Map();
 
@@ -1332,6 +1366,7 @@ export default function App() {
                 equipment: categoryValue,
                 month: normMonth,
                 product: categoryValue,
+                callType: readCallType(row),
                 problem: "ไม่ได้ระบุ",
                 system: "ไม่ได้ระบุ",
                 damagedPart: "ไม่ได้ระบุ",
@@ -1384,6 +1419,7 @@ export default function App() {
             rawCreateDate: findCol(["Create Date", "Date", "วันที่"]) || "ไม่ได้ระบุ",
             equipment: findCol(["Equipment", "รหัสอุปกรณ์"]) || "ไม่ได้ระบุ",
             month: normalizeMonthString(findCol(["Month", "เดือน"]) || "Unknown"),
+            callType: readCallType(row),
             product: findCol(["Product Type", "Product", "กลุ่มสินค้า"]) || getValue("Product Type"),
             problem: findCol(["Problem Type", "Problem", "อาการเสีย"]) || getValue("Problem Type"),
             system: findCol(["System", "ระบบ"]) || getValue("System"),
@@ -1434,6 +1470,7 @@ export default function App() {
       setDynamicLists({
         months: sortMonths(rawMonths),
         products: getUnique("product").sort(),
+        callTypes: Array.from(new Set(records.map((r: any) => r.callType))).sort(),
         problems: getUnique("problem").sort(),
         systems: getUnique("system").sort(),
         damagedParts: getUnique("damagedPart").sort(),
@@ -1462,6 +1499,7 @@ export default function App() {
 
   const globalFilteredRecords = useMemo(() => {
     if (!isDataLoaded) return [];
+    const callTypeSet = filterCallType.length > 0 ? new Set(filterCallType) : null;
     const productSet = filterProduct.length > 0 ? new Set(filterProduct) : null;
     const problemSet = filterProblem.length > 0 ? new Set(filterProblem) : null;
     const causeSet = filterCause.length > 0 ? new Set(filterCause) : null;
@@ -1474,6 +1512,7 @@ export default function App() {
     
     // เปลี่ยนมาใช้ .filter แทน for loop ช่วยเลี่ยง Loop Protector ของ CodeSandbox ได้ 100%
     return rawData.filter((rec: any) => {
+      if (callTypeSet && !callTypeSet.has(rec.callType)) return false;
       if (productSet && !productSet.has(rec.product)) return false;
       if (problemSet && !problemSet.has(rec.problem)) return false;
       if (causeSet && !causeSet.has(rec.cause)) return false;
@@ -1488,6 +1527,7 @@ export default function App() {
     rawData,
     isDataLoaded,
     filterProduct,
+    filterCallType,
     filterProblem,
     filterCause,
     filterDamagedPart,
@@ -1516,7 +1556,7 @@ export default function App() {
     const columns = [
       ["Ticket Number", "id"], ["Create Date", "rawCreateDate"],
       ["Equipment", "equipment"], ["Month", "month"],
-      ["Product Type", "product"], ["Problem Type", "problem"],
+      ["Call Type", "callType"], ["Product Type", "product"], ["Problem Type", "problem"],
       ["System", "system"], ["Damaged Parts", "damagedPart"],
       ["Cause", "cause"], ["Area", "area"], ["Team", "team"],
       ["Store Code", "storeCode"], ["Store Name", "storeName"], ["Calls", "calls"],
@@ -1619,6 +1659,7 @@ export default function App() {
     });
   }, [rawData, visibleMonths, dynamicLists.months]);
   const showForecast = !isLatestMonthClosed;
+  const forecastInfo = showForecast && visibleMonths.length > 0 ? {label: visibleMonths[visibleMonths.length-1], day: latestMonthMaxDay} : null;
 
   
   
@@ -1921,6 +1962,7 @@ export default function App() {
       { label: "ระบบ", opts: dynamicLists.systems, sel: filterSystem, set: setFilterSystem },
       { label: "พื้นที่", opts: dynamicLists.areas, sel: filterArea, set: setFilterArea },
       { label: "ทีม", opts: dynamicLists.teams, sel: filterTeam, set: setFilterTeam },
+      { label: "Call Type", opts: dynamicLists.callTypes, sel: filterCallType, set: setFilterCallType },
       { label: "เลือกเดือน", opts: dynamicLists.months, sel: filterMonth, set: setFilterMonth, highlight: true },
     ];
     return configs.map((cfg: any, i: any) => (
@@ -2061,7 +2103,7 @@ export default function App() {
             }))}
             {!visibleRows.length&&<tr><td colSpan={leading+12+tail} className="text-center text-slate-500">ไม่พบข้อมูล</td></tr>}
           </tbody>
-          {source.length>0&&<YearMonthSummary months={visibleMonths} totals={grandMonthly} total={grandTotal} label={tableDef.title+" สรุปรายปี"} labelColumns={leading} tailColumns={tail}/>}
+          {source.length>0&&<YearMonthSummary months={visibleMonths} totals={grandMonthly} total={grandTotal} label={tableDef.title+" สรุปรายปี"} labelColumns={leading} tailColumns={tail} forecastInfo={forecastInfo}/>}
         </table>
         {summaryRows.length>limit&&<button type="button" className="w-full p-3 font-bold text-indigo-600 bg-slate-50 dark:bg-slate-900" onClick={()=>setRowLimits((previous: any)=>({...previous,[tableDef.id]:limit+30}))}>แสดงผลเพิ่มอีก +30 รายการ</button>}
       </div>}
@@ -2454,6 +2496,7 @@ export default function App() {
               <TrendLineChart
                 data={chartAggregatedData.products}
                 months={visibleMonths}
+                forecastInfo={forecastInfo}
                 combineDefault={filterProduct.length === 0 && crossFilters.product.size === 0}
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:break-inside-avoid">
