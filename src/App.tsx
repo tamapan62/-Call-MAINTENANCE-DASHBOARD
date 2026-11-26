@@ -323,7 +323,6 @@ const getRowMaxVal = (monthlyArray: any) => Math.max(...(monthlyArray || []), 1)
 // 2. CHART & UI COMPONENTS
 // ==========================================
 
-const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: any) => {
 const TrendLineChart = ({ data, months, forecastInfo }: any) => {
   const [focusedProduct, setFocusedProduct] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
@@ -347,7 +346,6 @@ const TrendLineChart = ({ data, months, forecastInfo }: any) => {
     }));
   }, [data, months]);
   const focusedExists = (data || []).some((product: any) => product.name === focusedProduct);
-  const showCombined = combineDefault && !focusedExists;
   const showCombined = !focusedExists;
   const shown = showCombined
     ? Array.from(new Set(series.map((item: any) => item.year))).map(year => ({
@@ -2518,7 +2516,6 @@ export default function App() {
                 data={chartAggregatedData.products}
                 months={visibleMonths}
                 forecastInfo={forecastInfo}
-                combineDefault={filterProduct.length === 0 && crossFilters.product.size === 0}
               />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 print:grid-cols-2 print:break-inside-avoid">
                 <ParetoChart
