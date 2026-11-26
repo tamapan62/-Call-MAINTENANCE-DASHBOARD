@@ -379,6 +379,24 @@ const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: 
   const y = (value: number) => padding.top + plotHeight * (1 - value / ceiling);
   const barWidth = Math.min(42, step * 0.65 / Math.max(1, current.length));
   const showNumbers = !shown.length || new Set(shown.map((item: any) => item.name)).size <= 1;
+  // Reserve separate vertical lanes for labels sharing the same calendar month.
+  const lineLabelY = (item: any, month: number) => {
+    const occupied = current.filter((bar: any) => bar.values[month] !== null).map((bar: any) => y(bar.values[month]) - 10);
+    let result = 0;
+    for (const line of lines) {
+      if (line.values[month] === null) continue;
+      const preferred = y(line.values[month]) - 16;
+      let position = preferred;
+      while (occupied.some((other: number) => Math.abs(position - other) < 22)) position -= 22;
+      if (position < 14) {
+        position = y(line.values[month]) + 22;
+        while (occupied.some((other: number) => Math.abs(position - other) < 22)) position += 22;
+      }
+      occupied.push(position);
+      if (line.name === item.name && line.year === item.year) result = position;
+    }
+    return result;
+  };
   const tip = (item: any, month: number, value: number) => {
     const previous = month > 0 ? item.values[month - 1] : null;
     const trend = previous !== null && previous > 0 ? ((value - previous) / previous * 100).toFixed(1) + "% เทียบเดือนก่อน" : "";
@@ -416,7 +434,7 @@ const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: 
                 <text x={width-padding.right+91} y={Math.max(y(value)+8,y(projection(item, month)!)+12)+39} textAnchor="middle" fontSize="17" fontWeight="800" fill="#312e81">{value.toLocaleString()} Calls</text>
               </g>}
             </g>}
-            {showNumbers && <text x={x(month)} y={y(value)-10} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
+            {showNumbers && <text x={x(month)} y={y(value)-10} data-label-type="bar" data-label-month={month} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
           </g>)}
         </g>)}
         {lines.map((item: any) => {
@@ -425,7 +443,7 @@ const TrendLineChart = ({ data, months, combineDefault = false, forecastInfo }: 
             <path d={path} fill="none" stroke={item.color} strokeWidth="3" strokeDasharray={years.indexOf(item.year) % 2 ? "6 4" : undefined} />
             {item.values.map((value: number | null, month: number) => value === null ? null : <g key={month}>
               <circle cx={x(month)} cy={y(value)} r="4" fill={item.color}><title>{tip(item,month,value)}</title></circle>
-              {showNumbers && <text x={x(month)} y={y(value)-16} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
+              {showNumbers && <text x={x(month)} y={lineLabelY(item,month)} data-label-type="line" data-label-month={month} textAnchor="middle" fontSize="13" fontWeight="bold" fill={item.color}>{value.toLocaleString()}</text>}
             </g>)}
           </g>;
         })}
